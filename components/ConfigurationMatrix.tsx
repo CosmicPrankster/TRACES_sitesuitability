@@ -151,6 +151,24 @@ function CellDetail({ cell }: { cell: ConfigurationAssessment }) {
         ))}
       </ul>
 
+      {cell.fieldEvidence.length > 0 ? (
+        <>
+          <div className="section-label">Field evidence for this combination</div>
+          <ul className="tight">
+            {cell.fieldEvidence.map((o) => (
+              <li key={o.id}>
+                <strong>{o.observation}</strong>
+                <div className="hint" style={{ marginTop: "0.25rem" }}>
+                  Feed: {o.feed.replace(/_/g, " ")}
+                  {o.date ? ` · ${o.date}` : ""}
+                  {o.observer ? ` · ${o.observer}` : ""}
+                </div>
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
       <div className="section-label">Main uncertainty</div>
       <p>{cell.mainUncertainty}</p>
 

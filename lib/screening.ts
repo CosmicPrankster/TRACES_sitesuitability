@@ -29,6 +29,7 @@ import {
   massFractionBetween,
   round,
 } from "./psd";
+import { applyObservations, observationsForConfiguration, summariseObservations } from "./field-observations";
 import {
   ASSUMED_PARTICLE_DENSITY_KG_M3,
   collectSources,
@@ -383,6 +384,7 @@ export function assessConfiguration(
       ],
       mainUncertainty: `The ${cyclone.name} has no recorded separation performance.`,
       evidence: [],
+      fieldEvidence: observationsForConfiguration(ctx.site.fieldObservations, cyclone, membrane),
       assumptions: [],
       hydraulic,
       limitations: [
@@ -589,6 +591,16 @@ export function assessConfiguration(
       : "The relationship between reduced retained-solids mass and actual filterable volume, " +
         "which is not predicted by this screening.";
 
+  /* --- Field observations -------------------------------------------- */
+  // Anything actually seen at this site is applied last, because it is the
+  // strongest evidence held and it should be visible as the reason a cell
+  // carries more confidence than a desk screening otherwise would.
+  const fieldEvidence = observationsForConfiguration(ctx.site.fieldObservations, cyclone, membrane);
+  const effect = applyObservations(confidence, ctx.site.fieldObservations, cyclone, membrane);
+  confidence = effect.confidence;
+  reasoning.push(...effect.reasoning);
+  limitations.push(...effect.limitations);
+
   const p = presentationOf(classification);
   return {
     hydrocycloneId: cyclone.id,
@@ -606,6 +618,7 @@ export function assessConfiguration(
     evidence: ctx.site.data.filter(
       (d) => d.provenance === "measured" || d.provenance === "published",
     ),
+    fieldEvidence,
     assumptions,
     hydraulic,
     limitations,
@@ -774,9 +787,12 @@ function overallAssessment(
   matrix: ConfigurationAssessment[],
   window: UsefulWindow,
   siteSpecific: boolean,
+  fieldSummary?: string,
 ): ScreeningReport["overall"] {
   const prefix = siteSpecific
-    ? ""
+    ? fieldSummary
+      ? `${fieldSummary} `
+      : ""
     : "This is the application's default result, not an assessment of this site: no evidence " +
       "specific to it was found. With that said — ";
   const promising = matrix.filter((c) => c.classification === "promising");
@@ -852,6 +868,15 @@ function buildNarrative(
 
   known.push(`The site was entered as "${site.query}".`);
   if (site.resolvedName) known.push(`It was resolved to ${site.resolvedName}.`);
+
+  for (const o of site.fieldObservations) {
+    known.push(
+      `Observed at this site${o.date ? ` on ${o.date}` : ""}: ${o.observation} ` +
+        (o.doesNotDemonstrate.length
+          ? `It does not establish: ${o.doesNotDemonstrate.join(" ")}`
+          : ""),
+    );
+  }
 
   for (const d of site.data) {
     const line = `${d.parameter}: ${d.value}${d.unit ? ` ${d.unit}` : ""}${d.source ? ` (${d.source})` : ""}`;
@@ -989,6 +1014,24 @@ function buildRecommendedTests(
     );
   }
 
+  const confirmed = ctx.site.fieldObservations.filter((o) => o.kind === "separation_confirmed");
+  if (confirmed.length > 0) {
+    const units = [...new Set(confirmed.flatMap((o) => o.hydrocycloneIds ?? []))];
+    const onBed = confirmed.some((o) => o.feed === "disturbed_bed_sediment");
+    tests.unshift(
+      `Build directly on the separation already confirmed here${
+        units.length ? ` for ${units.join(" and ")}` : ""
+      }. ` +
+        (onBed
+          ? "That run used disturbed bed material, so the obvious next step is to repeat it on " +
+            "undisturbed water and size both the feed and the overflow. Sizing the two streams " +
+            "converts 'it separates' into a cut size, which is the number the whole matrix turns " +
+            "on and the one thing currently missing."
+          : "Size both the feed and the overflow on the next run to convert the observation into " +
+            "a cut size."),
+    );
+  }
+
   const unverified = cyclones.filter((c) => !c.dataComplete);
   if (unverified.length > 0) {
     tests.push(
@@ -1092,7 +1135,12 @@ export function runScreening(input: RunScreeningInput): ScreeningReport {
   const stats = analysePSD(resolved.psd);
   const matrix = assessAllConfigurations(ctx, cyclones, membranes);
   const window = findUsefulWindow(matrix, membranes);
-  const overall = overallAssessment(matrix, window, site.siteSpecific);
+  const overall = overallAssessment(
+    matrix,
+    window,
+    site.siteSpecific,
+    summariseObservations(site.fieldObservations),
+  );
   const ranked = rankConfigurations(matrix);
 
   return {
@@ -1105,6 +1153,7 @@ export function runScreening(input: RunScreeningInput): ScreeningReport {
     membranes,
     psdStatistics: stats,
     psdSource: resolved.psd,
+    fieldObservations: site.fieldObservations,
     matrix,
     overall,
     usefulWindow: window,

@@ -101,10 +101,12 @@ describe("honesty when nothing is known about the site", () => {
     const report = await screen("Tilford, River Wey");
     expect(report.siteData.siteSpecific).toBe(true);
     expect(report.warnings.join(" ")).not.toMatch(/NOT SITE-SPECIFIC/);
-    expect(report.siteData.particleCharacterBasis).toMatch(/Greensand|sand-bed/i);
-    // The geology claim is an inference and says so.
-    expect(report.siteData.particleCharacterProvenance).toBe("inferred");
-    expect(report.siteData.particleCharacterBasis).toMatch(/INFERENCE|confirmed against BGS/i);
+    // A field observation is on record here, so it - not the geology inference -
+    // is what sets the character, and its provenance is a measurement.
+    expect(report.siteData.particleCharacterProvenance).toBe("measured");
+    expect(report.siteData.particleCharacterBasis).toMatch(/field observation/i);
+    // And the basis states the qualifier that matters: it was bed material.
+    expect(report.siteData.particleCharacterBasis).toMatch(/bed material|disturbed bed/i);
   });
 
   it("becomes site-specific as soon as the user describes the water", async () => {

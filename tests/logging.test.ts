@@ -42,7 +42,8 @@ describe("CSV encoding", () => {
     const row = reportToLogRow(report, { sessionId: "s1", userQuestion: "why?", aiResponse: "because" });
 
     expect(row.site_input).toContain("Tilford");
-    expect(row.confidence).toBe("low");
+    // Tilford carries a field observation, which lifts confidence off the floor.
+    expect(row.confidence).toBe("medium");
     expect(row.configuration_results).toContain("10mmx10um=");
     expect(row.hydrocyclone_configurations).toContain("4mm");
     expect(row.assumptions.length).toBeGreaterThan(0);

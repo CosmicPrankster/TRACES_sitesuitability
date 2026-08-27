@@ -1,7 +1,7 @@
 # Editing this app — the plain-English guide
 
 You do not need to understand the whole codebase. Almost everything you will
-want to change lives in **five files**, and four of them are just lists you can
+want to change lives in **six files**, and five of them are just lists you can
 edit like a spreadsheet.
 
 **How to edit anything here:** open the file on GitHub, click the pencil icon,
@@ -165,7 +165,64 @@ placeholders for waterlogged flocs.
 
 ---
 
-## File 4 — things you know about specific sites
+## File 4 — what you actually saw at a site
+
+**`data/field-observations.ts`** — the strongest evidence the app holds.
+Everything else is a catalogue value, an open-data lookup or an assumption.
+These are things that *happened*.
+
+An observation can raise a configuration's confidence, set the solids character,
+and add its own reasoning to the cells it bears on.
+
+```ts
+{
+  id: "somewhere-2026-04-trial",
+  siteMatches: ["somewhere"],       // matched against what's typed
+  siteName: "Somewhere, River Whatever",
+  kind: "separation_confirmed",     // or no_separation | blockage | hydraulic |
+                                    //    solids_character | membrane_behaviour
+  feed: "natural_suspended_load",   // ← READ THE NEXT PARAGRAPH
+  hydrocycloneIds: ["10mm"],
+  observation: "What you actually saw, in your own words.",
+  demonstrates: ["What this genuinely establishes."],
+  doesNotDemonstrate: ["What it does NOT. Be strict with yourself here."],
+  provenance: "measured",
+  confidence: "medium",
+}
+```
+
+### The two fields that matter
+
+**`feed` — what the unit was actually fed.** This governs how much weight the
+observation carries, and it is the difference between a result that transfers to
+the real duty and one that does not:
+
+| Value | Weight | Why |
+|---|---|---|
+| `natural_suspended_load` | High | The water as it normally runs — the actual duty |
+| `disturbed_bed_sediment` | Partial | Far coarser and more concentrated than normal; close to the easiest duty the unit will ever get |
+| `spiked_or_synthetic` | Partial | The particle population was chosen, not encountered |
+| `unknown` | Low | Can't be judged — fill this in and it counts for more |
+
+**`doesNotDemonstrate` — the limits of what you saw.** Filling this in is what
+stops a good field result being over-read later, by you or by the AI. Leave it
+empty and the engine will say so in the report.
+
+### What an observation can and cannot do
+
+It can raise confidence **by one step, never above medium**. Reaching high
+confidence requires a measured grade-efficiency curve in the catalogue — a
+qualitative field result, however encouraging, cannot substitute for one.
+
+It can never manufacture a number. Seeing separation does not produce a cut size,
+so the catalogue stays flagged as unverified regardless.
+
+**Negative results count too.** A blockage or a no-separation observation is
+weighed exactly as a success would be, and counts against the configuration.
+
+---
+
+## File 5 — things you know about specific sites
 
 **`data/sites.ts`** — your own notebook. If you know something about a site,
 put it here and the app will use it every time.
@@ -194,7 +251,7 @@ Copy the Tilford entry as your template.
 
 ---
 
-## File 5 — where the judgement calls live
+## File 6 — where the judgement calls live
 
 **`lib/screening.ts`** — the engine. You mostly should not need this, but three
 constants near the top decide the colours:
@@ -226,10 +283,22 @@ couldn't.
 | 2 | `geocode.ts` | Turns the name into coordinates (OpenStreetMap) | No, but everything below needs it |
 | 3 | `ea-flood.ts` | Nearest river gauge, level trend, 72 h rainfall | **No** — context only |
 | 4 | `ea-water-quality.ts` | Archived suspended solids + turbidity | **YES** — if it finds *both* |
-| 5 | `bgs-geology.ts` | **Not built.** Returns a link to check manually | No — this is the big gap |
+| 5 | `bgs-geology.ts` | Bedrock + superficial deposits from BGS | **YES** — lithology sets the solids character |
 
-**Read that last column again.** Only #1 and #4 move the numbers. This is why
-the app can show you a page of river data and still produce the default matrix.
+Your field observations in `data/field-observations.ts` are checked before any
+of these and outrank all of them.
+
+### If the geology lookup comes back empty
+
+The BGS query is built against the standard Esri `identify` API, but the exact
+attribute names BGS returns could not be verified from the build environment.
+The parser is deliberately strict: if it does not recognise the attributes, it
+records **nothing** rather than guessing, and its status message lists the
+attribute keys the service actually returned.
+
+If you see that, it is a two-minute fix: copy those key names into
+`ATTRIBUTE_KEYS` at the top of `lib/providers/bgs-geology.ts`. If BGS has moved
+the service entirely, set `BGS_MAPSERVER_URL` in `.env.local`.
 
 ### Checking what actually happened
 
@@ -249,14 +318,18 @@ calls — useful when you are testing changes and don't want to wait.
 
 In priority order, in `lib/site.ts`:
 
-1. **What you typed** in the notes box, or clicked in the banner — always wins.
-2. **Your `data/sites.ts` entry** for that site.
-3. **Turbidity ÷ suspended solids** from the EA archive, if both were found.
+1. **A field observation** from `data/field-observations.ts` — a measurement,
+   so it outranks everything else.
+2. **What you typed** in the notes box, or clicked in the banner.
+3. **Your `data/sites.ts` entry** for that site.
+4. **Catchment geology** from BGS. Sand and gravel → sandy load; mudstone and
+   clay → clay load; chalk → fine carbonate. An inference, and labelled as one.
+5. **Turbidity ÷ suspended solids** from the EA archive, if both were found.
    High turbidity per unit mass = fine particles (they scatter more light).
    Thresholds are `FINES_RATIO_HIGH` / `FINES_RATIO_LOW`.
-4. **The type of water body** — standing water settles its coarse fraction;
+6. **The type of water body** — standing water settles its coarse fraction;
    estuaries are cohesive fines; groundwater is filtered by the aquifer.
-5. **Rivers: nothing.** Deliberately. See above.
+7. **Rivers with none of the above: nothing.** Deliberately. See above.
 
 ---
 
@@ -276,7 +349,7 @@ measured data instead of placeholders.
 ## If you break something
 
 ```bash
-npm test          # 84 tests — tells you what broke
+npm test          # 105 tests — tells you what broke
 npm run typecheck # catches typos in the data files
 git checkout .    # throw away your changes and start again
 ```

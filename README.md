@@ -38,7 +38,7 @@ npm run dev                    # http://localhost:3000
 Type `Tilford, River Wey`, press **Screen site**. That is the whole interaction.
 
 ```bash
-npm test          # 72 tests, no API keys and no network required
+npm test          # 105 tests, no API keys and no network required
 npm run typecheck
 npm run build
 ```
@@ -192,11 +192,12 @@ itself is deliberately not built yet.
 
 | Provider | Status | Notes |
 |---|---|---|
+| Field observations (`data/field-observations.ts`) | Working, offline | What you actually saw at a site. The strongest evidence held; outranks everything below. |
 | Curated knowledge (`data/sites.ts`) | Working, offline | What you already know. No network needed. |
 | OpenStreetMap Nominatim | Implemented | Geocoding. Set `SITE_DATA_USER_AGENT` — their usage policy asks for an identifiable one. |
 | EA real-time flood monitoring | Implemented | Nearest river gauge and its trend, plus 72 h antecedent rainfall. England only, open, no key. |
 | EA Water Quality Archive | Implemented | Archived suspended solids and turbidity near the site. England only, open, no key. |
-| BGS geology | **Not implemented** | Deliberately a stub. Returning invented geology would be worse than returning nothing; it links you to BGS GeoIndex to check manually. This is the highest-value source still to wire in. |
+| BGS geology | Implemented | Bedrock and superficial deposits via the Esri `identify` API. Lithology sets the solids character (sand/gravel → sandy load, mudstone → clay, and so on). Parses strictly: an unrecognised response records nothing and names the attribute keys it saw. |
 
 The remote providers are written against the documented shapes of those APIs but have **not
 been exercised against the live endpoints** — the development sandbox blocks outbound access
@@ -281,6 +282,7 @@ components/
   Chat.tsx                    optional AI panel
 data/
   hydrocyclones.ts            equipment knowledge, all of it
+  field-observations.ts       what you actually saw at a site
   membranes.ts                filtration ratings screened
   sites.ts                    curated site knowledge
   query_log.csv               the persistence layer
@@ -293,7 +295,7 @@ lib/
   tools.ts                    the functions the AI may call
   github-log.ts               CSV append via the GitHub API
 types/index.ts                Evidence<T> and the domain model
-tests/                        72 tests, no network, no API keys
+tests/                        105 tests, no network, no API keys
 ```
 
 ## Environment variables
@@ -309,6 +311,7 @@ All server-side only. See `.env.example`.
 | `SITE_DATA_USER_AGENT` | Identifiable UA for the open-data APIs. |
 | `ENABLE_REMOTE_SITE_DATA` | `false` disables all outbound lookups. |
 | `SITE_DATA_TIMEOUT_MS` | Per-lookup timeout, default 6000. |
+| `BGS_MAPSERVER_URL` | Override the BGS geology service endpoint if it moves. |
 
 ## Intended research workflow
 

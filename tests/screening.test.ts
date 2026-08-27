@@ -156,10 +156,23 @@ describe("critical test case 1: a site name and nothing else", () => {
   });
 
   it("caps confidence at low and warns while the evidence is placeholders", async () => {
-    const report = await screen();
+    // Deliberately a site with no field observations on record: with nothing
+    // but placeholder catalogue data, nothing may rise above low.
+    const siteData = await getSiteData("Somewhere with no records", { enableRemote: false });
+    const report = runScreening({
+      scenario: { siteQuery: "Somewhere with no records", siteData, changeLog: [] },
+    });
+    expect(siteData.fieldObservations).toHaveLength(0);
     expect(report.overall.confidence).toBe("low");
     expect(report.warnings.join(" ")).toMatch(/NOT verified|placeholder/i);
     expect(report.matrix.every((c) => c.confidence === "low" || c.confidence === "unknown")).toBe(true);
+  });
+
+  it("still warns about placeholder catalogue data even where field evidence exists", async () => {
+    const report = await screen();
+    expect(report.siteData.fieldObservations.length).toBeGreaterThan(0);
+    // Field evidence lifts confidence, but it does not make the cut sizes real.
+    expect(report.warnings.join(" ")).toMatch(/NOT verified|placeholder/i);
   });
 
   it("never claims a numerical probability or throughput gain", async () => {

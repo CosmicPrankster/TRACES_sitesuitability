@@ -84,6 +84,33 @@ export function ScreeningResult({
 
         <p>{report.overall.summary}</p>
 
+        {report.fieldObservations.length > 0 ? (
+          <div className="banner banner--info">
+            <strong>Field evidence on record for this site. </strong>
+            {report.fieldObservations.length} observation
+            {report.fieldObservations.length === 1 ? " was" : "s were"} recorded here and
+            {report.fieldObservations.length === 1 ? " has" : " have"} been used in the
+            assessment below.
+            <ul className="tight" style={{ marginTop: "0.6rem", marginBottom: 0 }}>
+              {report.fieldObservations.map((o) => (
+                <li key={o.id}>
+                  <strong>{o.kind.replace(/_/g, " ")}</strong>
+                  {o.date ? ` (${o.date})` : ""} — {o.observation}
+                  <div className="hint" style={{ marginTop: "0.3rem" }}>
+                    Feed: {o.feed.replace(/_/g, " ")}.
+                    {o.doesNotDemonstrate.length ? (
+                      <>
+                        {" "}
+                        <strong>Does not establish:</strong> {o.doesNotDemonstrate.join(" ")}
+                      </>
+                    ) : null}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
         <details>
           <summary>What the solids were taken to be, and why</summary>
           <p className="row" style={{ marginBottom: "0.4rem" }}>

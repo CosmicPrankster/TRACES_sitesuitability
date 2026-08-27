@@ -12,6 +12,7 @@ import type {
 } from "@/types";
 import { offlineProviders, remoteProviders, geocodeProvider } from "./providers";
 import { parsePSDFromText, psdFromPercentiles } from "./psd";
+import { findFieldObservations } from "@/data/field-observations";
 
 /**
  * Builds the site picture by running the providers and merging their fragments.
@@ -351,11 +352,52 @@ export async function getSiteData(
     particleCharacterBasis:
       "Not yet determined - no evidence about this site's solids has been considered.",
     siteSpecific: false,
+    fieldObservations: [],
     data: [],
     providerReports: [],
     unknowns: [],
     assumptions: [],
   };
+
+  // 0. Your own field observations. These are the strongest evidence the
+  //    application holds, so they are loaded before anything else.
+  site.fieldObservations = findFieldObservations(location);
+  if (site.fieldObservations.length > 0) {
+    site.providerReports.push({
+      providerId: "field-observations",
+      providerName: "Recorded field observations (data/field-observations.ts)",
+      status: "ok",
+      message: `${site.fieldObservations.length} observation(s) recorded at this site.`,
+    });
+    for (const o of site.fieldObservations) {
+      site.data.push({
+        parameter: `Field observation - ${o.kind.replace(/_/g, " ")}`,
+        value: o.observation,
+        provenance: o.provenance,
+        confidence: o.confidence,
+        source: `Observed at ${o.siteName}${o.observer ? ` by ${o.observer}` : ""}`,
+        date: o.date,
+        notes:
+          `Feed: ${o.feed.replace(/_/g, " ")}. ` +
+          (o.doesNotDemonstrate.length
+            ? `Does not establish: ${o.doesNotDemonstrate.join(" ")}`
+            : "No limits recorded for this observation."),
+      });
+    }
+
+    // An observation may tell us what the solids are. That is a measurement,
+    // so it outranks every inference the providers can offer.
+    const stated = site.fieldObservations.find((o) => o.particleCharacter);
+    if (stated?.particleCharacter) {
+      site.particleCharacter = stated.particleCharacter;
+      site.particleCharacterProvenance = stated.provenance;
+      site.particleCharacterBasis =
+        `Taken from a field observation at this site: "${stated.observation}" ` +
+        `The feed was ${stated.feed.replace(/_/g, " ")}, so note that this characterises what was ` +
+        "put through the unit rather than necessarily the naturally suspended load, which in a " +
+        "river is normally finer than its bed material.";
+    }
+  }
 
   let ctx: SiteLookupContext = { timeoutMs, userAgent, fetchImpl: options.fetchImpl };
 
@@ -514,7 +556,10 @@ export function finaliseSite(site: SiteData): SiteData {
    * Getting this wrong is how a default result gets presented as an analysis
    * with the warning suppressed, which is exactly what happened before.
    * ------------------------------------------------------------------ */
-  site.siteSpecific = site.psd !== undefined || site.particleCharacter !== "unknown";
+  site.siteSpecific =
+    site.psd !== undefined ||
+    site.particleCharacter !== "unknown" ||
+    site.fieldObservations.length > 0;
 
   if (site.particleCharacter === "unknown") {
     site.particleCharacterBasis =

@@ -330,6 +330,8 @@ export interface SiteData {
    * report says so prominently rather than presenting a default as an analysis.
    */
   siteSpecific: boolean;
+  /** Observations you recorded at this site, from data/field-observations.ts. */
+  fieldObservations: FieldObservation[];
   /** Every auditable datum gathered, from every provider. */
   data: SiteDatum[];
   psd?: PSD;
@@ -373,6 +375,69 @@ export interface SiteDataFragment {
   psd?: PSD;
   unknowns?: string[];
   assumptions?: Assumption[];
+}
+
+/* -------------------------------------------------------------------------- */
+/* Field observations - what you actually saw at a site                        */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * What kind of claim an observation makes.
+ */
+export type ObservationKind =
+  | "separation_confirmed" // solids were seen reporting to the underflow
+  | "no_separation" // the unit was run and nothing useful separated
+  | "blockage" // the unit blocked, bridged or wore
+  | "hydraulic" // something was learned about flow/pressure in practice
+  | "solids_character" // something was learned about what the solids are
+  | "membrane_behaviour" // something was learned about the downstream element
+  | "other";
+
+/**
+ * What the unit was actually fed. This is the single most important qualifier
+ * on any field observation, and the engine treats the categories very
+ * differently.
+ *
+ * Deliberately disturbing bed sediment produces a feed that is far coarser and
+ * far more concentrated than the water a plant would normally see. A
+ * hydrocyclone separating that is a real and useful result - it proves the unit
+ * works, passes solids and does not block - but it is close to the easiest duty
+ * the device will ever be given, and it says little about its behaviour on the
+ * naturally suspended load, which is finer.
+ */
+export type ObservationFeed =
+  | "natural_suspended_load" // water as it normally runs
+  | "disturbed_bed_sediment" // bed kicked up, dredged or agitated
+  | "spiked_or_synthetic" // dosed with a known material
+  | "unknown";
+
+export interface FieldObservation {
+  id: string;
+  /** Lower-cased substrings matched against the site query. */
+  siteMatches: string[];
+  /** Human-readable site name, for the report. */
+  siteName: string;
+  date?: string;
+  observer?: string;
+  kind: ObservationKind;
+  feed: ObservationFeed;
+  /** Units involved. Omit if the observation is not about specific equipment. */
+  hydrocycloneIds?: string[];
+  /** Membrane ratings involved, if any. */
+  membraneIds?: string[];
+  /** What was seen, in the observer's own words. */
+  observation: string;
+  /** What this observation genuinely establishes. */
+  demonstrates: string[];
+  /** What it does NOT establish - as important as what it does. */
+  doesNotDemonstrate: string[];
+  /** Set only if the observation genuinely tells you what the solids are. */
+  particleCharacter?: ParticleCharacter;
+  provenance: Provenance;
+  confidence: Confidence;
+  /** Any supporting record: a photo, a log, a sample reference. */
+  evidenceRef?: string;
+  notes?: string[];
 }
 
 /* -------------------------------------------------------------------------- */
@@ -453,6 +518,8 @@ export interface ConfigurationAssessment {
   reasoning: string[];
   mainUncertainty: string;
   evidence: SiteDatum[];
+  /** Observations from this site that bear on this specific combination. */
+  fieldEvidence: FieldObservation[];
   assumptions: string[];
   hydraulic: HydraulicCheck;
   limitations: string[];
@@ -497,6 +564,8 @@ export interface ScreeningReport {
   membranes: MembraneOption[];
   psdStatistics?: PSDStatistics;
   psdSource?: PSD;
+  /** Every field observation matched to this site. */
+  fieldObservations: FieldObservation[];
   matrix: ConfigurationAssessment[];
   overall: {
     classification: ScreeningClass;
