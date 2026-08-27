@@ -250,6 +250,13 @@ function characterFromWaterBodyType(
           "Estuarine and coastal waters are typically dominated by fine cohesive sediment, often " +
           "flocculated by salinity. Inferred from the water body type, not measured here.",
       };
+    case "river":
+      // Deliberately no inference. A river's suspended-solids character is set
+      // by its catchment geology, which is not retrieved (the BGS provider is a
+      // stub). Guessing "mixed mineral" for every river in the country would be
+      // fabrication dressed as analysis, and would produce exactly the identical
+      // matrix this flag exists to expose.
+      return undefined;
     case "groundwater":
       return {
         character: "mixed_mineral",
@@ -499,15 +506,15 @@ export function finaliseSite(site: SiteData): SiteData {
   /* ------------------------------------------------------------------ *
    * Is this result actually about THIS site?
    *
-   * If nothing site-specific fed the assessment, the matrix below is the
-   * default and would be identical for any other location. That has to be
-   * said plainly rather than presented as an analysis.
+   * The test is NOT "did any provider return anything". Knowing the river's
+   * name does not change a single number in the matrix. The test is whether
+   * something actually DROVE the assessment - which, given the engine, means
+   * the particle population: the solids character or a PSD.
+   *
+   * Getting this wrong is how a default result gets presented as an analysis
+   * with the warning suppressed, which is exactly what happened before.
    * ------------------------------------------------------------------ */
-  const hasRealEvidence = site.data.some(
-    (d) => d.provenance === "measured" || d.provenance === "published",
-  );
-  site.siteSpecific =
-    site.particleCharacter !== "unknown" || site.psd !== undefined || hasRealEvidence;
+  site.siteSpecific = site.psd !== undefined || site.particleCharacter !== "unknown";
 
   if (site.particleCharacter === "unknown") {
     site.particleCharacterBasis =

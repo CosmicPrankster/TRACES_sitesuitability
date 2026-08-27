@@ -3,7 +3,7 @@ import { getSiteData } from "@/lib/site";
 import { runScreening } from "@/lib/screening";
 import { appendLogRow, isLoggingConfigured, reportToLogRow, type LogResult } from "@/lib/github-log";
 import { isAiConfigured } from "@/lib/ai";
-import type { Scenario } from "@/types";
+import type { ParticleCharacter, Scenario } from "@/types";
 
 /**
  * POST /api/screen
@@ -22,7 +22,18 @@ interface ScreenRequest {
   site?: string;
   notes?: string;
   sessionId?: string;
+  /** Set when the user answers the "what are the solids like?" prompt. */
+  particleCharacter?: ParticleCharacter;
 }
+
+const CHARACTERS: ParticleCharacter[] = [
+  "sand",
+  "mixed_mineral",
+  "silt",
+  "clay",
+  "organic",
+  "unknown",
+];
 
 export async function POST(request: Request) {
   let body: ScreenRequest;
@@ -53,11 +64,27 @@ export async function POST(request: Request) {
       userNotes: notes,
     });
 
+    const stated =
+      body.particleCharacter && CHARACTERS.includes(body.particleCharacter)
+        ? body.particleCharacter
+        : undefined;
+
+    if (stated && stated !== "unknown") {
+      // The user's own answer outranks anything the application would infer.
+      siteData.particleCharacter = stated;
+      siteData.particleCharacterProvenance = "inferred";
+      siteData.particleCharacterBasis =
+        "Selected by the user when asked what the solids are like. This is their description, " +
+        "not a measurement, but it outranks anything the application would otherwise infer.";
+      siteData.siteSpecific = true;
+    }
+
     const scenario: Scenario = {
       siteQuery: site,
       userNotes: notes,
       siteData,
-      changeLog: [],
+      particleCharacterOverride: stated && stated !== "unknown" ? stated : undefined,
+      changeLog: stated && stated !== "unknown" ? [`Solids character set to "${stated}" by the user.`] : [],
     };
 
     const report = runScreening({ scenario });

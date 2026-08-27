@@ -1,7 +1,7 @@
 "use client";
 
 import type { LogResult } from "@/lib/github-log";
-import type { ScreeningClass, ScreeningReport } from "@/types";
+import type { ParticleCharacter, ScreeningClass, ScreeningReport } from "@/types";
 import { ConfigurationMatrix } from "./ConfigurationMatrix";
 
 const TONE: Record<ScreeningClass, string> = {
@@ -12,7 +12,25 @@ const TONE: Record<ScreeningClass, string> = {
   insufficient_data: "neutral",
 };
 
-export function ScreeningResult({ report, log }: { report: ScreeningReport; log?: LogResult }) {
+const CHARACTER_CHOICES: { id: ParticleCharacter; label: string; hint: string }[] = [
+  { id: "sand", label: "Gritty / sandy", hint: "grit you can feel; settles fast in a jar" },
+  { id: "mixed_mineral", label: "Mixed mineral", hint: "some grit, some haze" },
+  { id: "silt", label: "Silty", hint: "settles slowly; leaves a smooth deposit" },
+  { id: "clay", label: "Clay / cloudy", hint: "stays cloudy for hours; slippery, not gritty" },
+  { id: "organic", label: "Organic", hint: "algae, peat, leaf matter; brown or green tint" },
+];
+
+export function ScreeningResult({
+  report,
+  log,
+  busy,
+  onSetCharacter,
+}: {
+  report: ScreeningReport;
+  log?: LogResult;
+  busy?: boolean;
+  onSetCharacter?: (c: ParticleCharacter) => void;
+}) {
   const site = report.siteData;
 
   return (
@@ -28,12 +46,31 @@ export function ScreeningResult({ report, log }: { report: ScreeningReport; log?
 
         {!site.siteSpecific ? (
           <div className="banner banner--warn" role="alert">
-            <strong>Not a site-specific result. </strong>
-            No provider returned any measured or published datum for this location, and nothing
-            was supplied about its solids, so what follows is the application’s default — it
-            would come back identical for any other site. It shows how the method behaves, not
-            what this site is like. Describe the water in the notes box, or paste a
-            particle-size distribution, to get an assessment that is actually about this site.
+            <strong>Not a site-specific result yet. </strong>
+            Nothing found for this location tells us what the suspended solids are actually
+            like, and that is the one input the whole matrix turns on. What follows is the
+            application’s default — it would come back identical for any other site.
+            <p style={{ margin: "0.75rem 0 0.4rem", fontWeight: 600 }}>
+              What is the water like? One click re-runs everything.
+            </p>
+            <div className="suggestions">
+              {CHARACTER_CHOICES.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  disabled={busy || !onSetCharacter}
+                  onClick={() => onSetCharacter?.(c.id)}
+                  title={c.hint}
+                >
+                  {c.label}
+                </button>
+              ))}
+            </div>
+            <p className="hint" style={{ margin: "0.4rem 0 0" }}>
+              Not sure? Fill a clear jar, let it stand, and look after five minutes: grit on the
+              bottom is sandy; a haze that will not clear is clay. Your answer is recorded as
+              your description, not as a measurement.
+            </p>
           </div>
         ) : null}
 

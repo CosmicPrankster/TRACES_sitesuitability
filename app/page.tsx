@@ -5,7 +5,7 @@ import { SiteInput } from "@/components/SiteInput";
 import { ScreeningResult } from "@/components/ScreeningResult";
 import { Chat } from "@/components/Chat";
 import type { LogResult } from "@/lib/github-log";
-import type { Scenario, ScreeningReport } from "@/types";
+import type { ParticleCharacter, Scenario, ScreeningReport } from "@/types";
 
 export default function Page() {
   const [report, setReport] = useState<ScreeningReport | null>(null);
@@ -20,7 +20,10 @@ export default function Page() {
     [],
   );
 
-  async function screen(site: string, notes: string) {
+  const [lastQuery, setLastQuery] = useState<{ site: string; notes: string }>({ site: "", notes: "" });
+
+  async function screen(site: string, notes: string, particleCharacter?: ParticleCharacter) {
+    setLastQuery({ site, notes });
     setBusy(true);
     setError(null);
     setReport(null);
@@ -30,7 +33,7 @@ export default function Page() {
       const res = await fetch("/api/screen", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ site, notes, sessionId }),
+        body: JSON.stringify({ site, notes, sessionId, particleCharacter }),
       });
       const data = await res.json();
 
@@ -71,7 +74,14 @@ export default function Page() {
         </div>
       ) : null}
 
-      {report ? <ScreeningResult report={report} log={log} /> : null}
+      {report ? (
+        <ScreeningResult
+          report={report}
+          log={log}
+          busy={busy}
+          onSetCharacter={(c) => void screen(lastQuery.site, lastQuery.notes, c)}
+        />
+      ) : null}
 
       {report && scenario ? (
         <Chat

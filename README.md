@@ -23,6 +23,10 @@ application's data layer.
 
 ---
 
+> **Editing this yourself?** Start with **[docs/TUNING.md](docs/TUNING.md)** — a
+> plain-English guide to which five files control the answer, what each number
+> means, and how the site search actually works. No codebase knowledge assumed.
+
 ## Quick start
 
 ```bash

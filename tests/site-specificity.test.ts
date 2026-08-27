@@ -117,3 +117,60 @@ describe("honesty when nothing is known about the site", () => {
     expect(told.siteData.particleCharacterBasis).toMatch(/Stated by the user/i);
   });
 });
+
+describe("regression: a river name must not suppress the warning", () => {
+  it("does not count knowing the river's name as site-specific", async () => {
+    // The real-world case: the EA returns a river and catchment, but no
+    // determinands. Nothing about the particle population is known, so the
+    // matrix is still the default and must still say so.
+    const site = await getSiteData("River Severn, Shrewsbury", { enableRemote: false });
+    site.data.push({
+      parameter: "River",
+      value: "Severn",
+      provenance: "published",
+      confidence: "high",
+      source: "EA station record",
+    });
+    site.waterBody = "Severn";
+    const { finaliseSite } = await import("@/lib/site");
+    finaliseSite(site);
+
+    expect(site.particleCharacter).toBe("unknown");
+    expect(site.siteSpecific).toBe(false);
+
+    const report = runScreening({
+      scenario: { siteQuery: "River Severn, Shrewsbury", siteData: site, changeLog: [] },
+    });
+    expect(report.warnings.join(" ")).toMatch(/NOT SITE-SPECIFIC/);
+  });
+
+  it("refuses to invent a character for a river, since geology is what would settle it", async () => {
+    const a = await getSiteData("River Thames, Oxford", { enableRemote: false });
+    const b = await getSiteData("River Aire, Leeds", { enableRemote: false });
+    // Both unknown - and both loudly flagged, rather than quietly given the
+    // same fabricated "mixed mineral" character.
+    expect(a.particleCharacter).toBe("unknown");
+    expect(b.particleCharacter).toBe("unknown");
+    expect(a.siteSpecific).toBe(false);
+    expect(b.siteSpecific).toBe(false);
+  });
+
+  it("one stated character makes the result site-specific and changes the matrix", async () => {
+    const bare = await getSiteData("River Severn, Shrewsbury", { enableRemote: false });
+    const bareReport = runScreening({
+      scenario: { siteQuery: "x", siteData: bare, changeLog: [] },
+    });
+
+    const told = await getSiteData("River Severn, Shrewsbury", { enableRemote: false });
+    const toldReport = runScreening({
+      scenario: {
+        siteQuery: "x",
+        siteData: told,
+        particleCharacterOverride: "sand",
+        changeLog: [],
+      },
+    });
+
+    expect(signature(bareReport)).not.toBe(signature(toldReport));
+  });
+});
