@@ -23,6 +23,11 @@ application's data layer.
 
 ---
 
+> **Getting the same result for every site?** Open **http://localhost:3000/diagnose**,
+> type the site, press Diagnose. It runs every lookup for real and tells you which
+> step failed and how to fix it. Nine times in ten it is geocoding, and the fix is
+> setting `SITE_DATA_USER_AGENT` in `.env.local`.
+>
 > **Editing this yourself?** Start with **[docs/TUNING.md](docs/TUNING.md)** — a
 > plain-English guide to which five files control the answer, what each number
 > means, and how the site search actually works. No codebase knowledge assumed.
@@ -38,7 +43,7 @@ npm run dev                    # http://localhost:3000
 Type `Tilford, River Wey`, press **Screen site**. That is the whole interaction.
 
 ```bash
-npm test          # 105 tests, no API keys and no network required
+npm test          # 111 tests, no API keys and no network required
 npm run typecheck
 npm run build
 ```
@@ -194,7 +199,7 @@ itself is deliberately not built yet.
 |---|---|---|
 | Field observations (`data/field-observations.ts`) | Working, offline | What you actually saw at a site. The strongest evidence held; outranks everything below. |
 | Curated knowledge (`data/sites.ts`) | Working, offline | What you already know. No network needed. |
-| OpenStreetMap Nominatim | Implemented | Geocoding. Set `SITE_DATA_USER_AGENT` — their usage policy asks for an identifiable one. |
+| Geocoding (Open-Meteo → Nominatim) | Implemented | Two independent backends, tried in turn, each with progressively shorter query variants. **Everything else needs the coordinates it returns**, so it must not be a single point of failure. Set `SITE_DATA_USER_AGENT` — Nominatim 403s generic ones. |
 | EA real-time flood monitoring | Implemented | Nearest river gauge and its trend, plus 72 h antecedent rainfall. England only, open, no key. |
 | EA Water Quality Archive | Implemented | Archived suspended solids and turbidity near the site. England only, open, no key. |
 | BGS geology | Implemented | Bedrock and superficial deposits via the Esri `identify` API. Lithology sets the solids character (sand/gravel → sandy load, mudstone → clay, and so on). Parses strictly: an unrecognised response records nothing and names the attribute keys it saw. |
@@ -273,6 +278,7 @@ appropriate site measurements and pilot/bench testing.
 ```
 app/
   page.tsx                    the only screen
+  diagnose/page.tsx           why am I getting this result?
   api/screen/route.ts         site in, report out
   api/chat/route.ts           stateless conversation turn
 components/
@@ -295,7 +301,7 @@ lib/
   tools.ts                    the functions the AI may call
   github-log.ts               CSV append via the GitHub API
 types/index.ts                Evidence<T> and the domain model
-tests/                        105 tests, no network, no API keys
+tests/                        111 tests, no network, no API keys
 ```
 
 ## Environment variables

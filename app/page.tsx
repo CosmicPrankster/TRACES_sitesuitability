@@ -65,6 +65,11 @@ export default function Page() {
 
       <SiteInput onScreen={screen} busy={busy} />
 
+      <p className="hint" style={{ marginTop: "-0.5rem", marginBottom: "1.25rem" }}>
+        Getting the same result for every site?{" "}
+        <a href="/diagnose">Run the diagnostic</a> — it shows which lookup failed and why.
+      </p>
+
       {error ? <div className="banner banner--error">{error}</div> : null}
 
       {busy ? (
