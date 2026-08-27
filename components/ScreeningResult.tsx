@@ -26,6 +26,17 @@ export function ScreeningResult({ report, log }: { report: ScreeningReport; log?
           <p className="hint">Entered as “{report.siteQuery}”</p>
         ) : null}
 
+        {!site.siteSpecific ? (
+          <div className="banner banner--warn" role="alert">
+            <strong>Not a site-specific result. </strong>
+            No provider returned any measured or published datum for this location, and nothing
+            was supplied about its solids, so what follows is the application’s default — it
+            would come back identical for any other site. It shows how the method behaves, not
+            what this site is like. Describe the water in the notes box, or paste a
+            particle-size distribution, to get an assessment that is actually about this site.
+          </div>
+        ) : null}
+
         <div className="verdict">
           <span className="verdict-label">{report.overall.userLabel}</span>
           <span className={`pill pill--${TONE[report.overall.classification]}`}>
@@ -35,6 +46,21 @@ export function ScreeningResult({ report, log }: { report: ScreeningReport; log?
         </div>
 
         <p>{report.overall.summary}</p>
+
+        <details>
+          <summary>What the solids were taken to be, and why</summary>
+          <p className="row" style={{ marginBottom: "0.4rem" }}>
+            <span className={`prov prov--${site.particleCharacterProvenance}`}>
+              {site.particleCharacterProvenance}
+            </span>
+            <span className="pill pill--neutral">{site.particleCharacter}</span>
+          </p>
+          <p>{site.particleCharacterBasis}</p>
+          <p className="hint" style={{ marginBottom: 0 }}>
+            This is the single biggest lever in the whole assessment. If it is wrong, say so in
+            the chat and the matrix will be re-run.
+          </p>
+        </details>
 
         {report.warnings.length > 0 ? (
           <div role="status">

@@ -41,6 +41,7 @@ export const localKnowledgeProvider: SiteDataProvider = {
       landUseNotes: site.landUseNotes,
       particleCharacter: site.particleCharacter,
       particleCharacterProvenance: site.particleCharacterProvenance,
+      particleCharacterBasis: site.particleCharacterBasis,
       data: site.data,
       unknowns: site.unknowns,
     };

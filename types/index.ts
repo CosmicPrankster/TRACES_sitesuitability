@@ -322,6 +322,14 @@ export interface SiteData {
   landUseNotes: string[];
   particleCharacter: ParticleCharacter;
   particleCharacterProvenance: Provenance;
+  /** What led to that character - the audit trail for the biggest single lever. */
+  particleCharacterBasis: string;
+  /**
+   * False when nothing specific to this site influenced the assessment, i.e. the
+   * result is the default and would be identical for any other location. The
+   * report says so prominently rather than presenting a default as an analysis.
+   */
+  siteSpecific: boolean;
   /** Every auditable datum gathered, from every provider. */
   data: SiteDatum[];
   psd?: PSD;
@@ -360,6 +368,7 @@ export interface SiteDataFragment {
   landUseNotes?: string[];
   particleCharacter?: ParticleCharacter;
   particleCharacterProvenance?: Provenance;
+  particleCharacterBasis?: string;
   data?: SiteDatum[];
   psd?: PSD;
   unknowns?: string[];

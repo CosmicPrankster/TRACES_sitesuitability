@@ -24,6 +24,8 @@ export interface CuratedSite {
   catchment?: string;
   particleCharacter?: ParticleCharacter;
   particleCharacterProvenance?: Provenance;
+  /** Why that character - shown to the user as the audit trail. */
+  particleCharacterBasis?: string;
   geologyNotes?: string[];
   landUseNotes?: string[];
   data: SiteDatum[];
@@ -43,8 +45,15 @@ export const curatedSites: CuratedSite[] = [
         "general regional geology and must be confirmed against BGS GeoIndex for the " +
         "specific abstraction point before it is relied on.",
     ],
-    // Deliberately left unset: the particle character is derived by the engine
-    // from the evidence actually retrieved, and is reported as an assumption.
+    particleCharacter: "sand",
+    particleCharacterProvenance: "inferred",
+    particleCharacterBasis:
+      "The Tilford reach sits in the Lower Greensand outcrop of west Surrey, a sandy " +
+      "formation, and the Wey here is a sand-bed river. A sand-dominated mineral fraction is " +
+      "therefore the most likely character of its mineral load. This is an INFERENCE from " +
+      "regional geology, not a measurement or a site-specific citation, and it must be " +
+      "confirmed against BGS GeoIndex for the actual abstraction point. Note also that the " +
+      "suspended load of a sand-bed river is normally much finer than its bed material.",
     data: [
       {
         parameter: "Water body",

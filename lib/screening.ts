@@ -773,7 +773,12 @@ export function findUsefulWindow(
 function overallAssessment(
   matrix: ConfigurationAssessment[],
   window: UsefulWindow,
+  siteSpecific: boolean,
 ): ScreeningReport["overall"] {
+  const prefix = siteSpecific
+    ? ""
+    : "This is the application's default result, not an assessment of this site: no evidence " +
+      "specific to it was found. With that said — ";
   const promising = matrix.filter((c) => c.classification === "promising");
   const worth = matrix.filter((c) => c.classification === "potentially_suitable");
   const assessed = matrix.filter((c) => c.classification !== "insufficient_data");
@@ -797,6 +802,7 @@ function overallAssessment(
       userLabel: "Promising for further investigation",
       confidence,
       summary:
+        prefix +
         `${promising.length} of ${matrix.length} screened combinations look promising and ` +
         `${worth.length} more are worth investigating. ${window.statement} The mechanism is a ` +
         "reduction in the coarser solids reaching the membrane, which could improve filterability; " +
@@ -810,6 +816,7 @@ function overallAssessment(
       userLabel: "Worth investigating, with reservations",
       confidence,
       summary:
+        prefix +
         `No combination reaches the "promising" threshold, but ${worth.length} of ${matrix.length} ` +
         `are worth investigating. ${window.statement}`,
     };
@@ -820,6 +827,7 @@ function overallAssessment(
     userLabel: "Hydrocyclone pre-treatment looks unlikely to help here",
     confidence,
     summary:
+      prefix +
       "On the evidence available, none of the catalogued hydrocyclones removes enough of the " +
       "material the screened membrane ratings would retain for pre-treatment to look worthwhile. " +
       `${window.statement} The most likely way to overturn this conclusion is a measured ` +
@@ -869,6 +877,8 @@ function buildNarrative(
       assumed.push(`${c.name}: no cut size recorded, so it could not be assessed.`);
     }
   }
+
+  assumed.push(`Solids character: ${site.particleCharacterBasis}`);
 
   if (ctx.psdIsPlaceholder) {
     assumed.push(
@@ -1020,6 +1030,17 @@ function buildWarnings(
 ): string[] {
   const warnings: string[] = [];
 
+  if (!site.siteSpecific) {
+    warnings.push(
+      "THIS RESULT IS NOT SITE-SPECIFIC. No provider returned any measured or published datum " +
+        `for "${site.query}", and nothing was supplied about its solids, so the assessment below ` +
+        "is the application's default: it would come back identical for any other location. It " +
+        "shows how the method behaves, not what this site is like. Describe the water in the " +
+        "notes box, or supply a particle-size distribution, to get an assessment that is actually " +
+        "about this site.",
+    );
+  }
+
   const placeholderUnits = cyclones.filter(
     (c) => c.cutSize?.d50Um && !c.cutSize.d50Um.verified,
   );
@@ -1071,7 +1092,7 @@ export function runScreening(input: RunScreeningInput): ScreeningReport {
   const stats = analysePSD(resolved.psd);
   const matrix = assessAllConfigurations(ctx, cyclones, membranes);
   const window = findUsefulWindow(matrix, membranes);
-  const overall = overallAssessment(matrix, window);
+  const overall = overallAssessment(matrix, window, site.siteSpecific);
   const ranked = rankConfigurations(matrix);
 
   return {

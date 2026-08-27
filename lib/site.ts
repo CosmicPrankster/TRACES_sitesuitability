@@ -159,6 +159,110 @@ export function particleCharacterFromText(text: string): ParticleCharacter | und
   return undefined;
 }
 
+/**
+ * Reads a water body type out of the user's own words. This is what they told
+ * us, so it is recorded as an inference from their query rather than a lookup.
+ * Returns `undefined` rather than guessing.
+ */
+export function waterBodyTypeFromText(text: string): WaterBodyType | undefined {
+  const t = text.toLowerCase();
+  if (/\b(borehole|bore hole|well|aquifer|groundwater|ground water|spring)\b/.test(t)) {
+    return "groundwater";
+  }
+  if (/\b(estuary|estuarine|harbour|harbor|tidal|coastal|sea|marine)\b/.test(t)) {
+    return "estuary_coastal";
+  }
+  if (/\b(loch|lake|reservoir|lough|mere|pond|impoundment)\b/.test(t)) {
+    return "lake_reservoir";
+  }
+  if (/\b(river|stream|brook|beck|burn|creek|weir|ford)\b/.test(t)) return "river";
+  if (/\b(process water|effluent|wash water|tailings|slurry)\b/.test(t)) return "process_water";
+  return undefined;
+}
+
+/**
+ * Turbidity per unit suspended-solids mass is a genuine indicator of fineness:
+ * fine particles scatter far more light per unit mass than coarse ones. The
+ * ratio is therefore informative where both determinands were retrieved.
+ *
+ * The BANDS below are a screening judgement, not a measured property, and the
+ * result is recorded as an inference at low confidence.
+ */
+const FINES_RATIO_HIGH = 3.0; // NTU per mg/L, above which fines look dominant
+const FINES_RATIO_LOW = 1.0; // below which the population looks coarse
+
+function characterFromWaterQuality(site: SiteData):
+  | { character: ParticleCharacter; basis: string }
+  | undefined {
+  const find = (prefix: string) =>
+    site.data.find(
+      (d) => d.parameter.toLowerCase().startsWith(prefix) && typeof d.value === "number",
+    );
+  const ss = find("suspended solids");
+  const turb = find("turbidity");
+  if (!ss || !turb) return undefined;
+
+  const ssV = Number(ss.value);
+  const turbV = Number(turb.value);
+  if (!(ssV > 0) || !(turbV > 0)) return undefined;
+
+  const ratio = turbV / ssV;
+  const stem =
+    `Archived turbidity (${turbV}) and suspended solids (${ssV}) near the site give a ratio of ` +
+    `${ratio.toFixed(2)} NTU per mg/L. Fine particles scatter more light per unit mass, so this ` +
+    "ratio indicates fineness";
+
+  if (ratio >= FINES_RATIO_HIGH) {
+    return {
+      character: "silt",
+      basis: `${stem} — above the ${FINES_RATIO_HIGH} screening band, indicating a fine-dominated population.`,
+    };
+  }
+  if (ratio <= FINES_RATIO_LOW) {
+    return {
+      character: "mixed_mineral",
+      basis: `${stem} — below the ${FINES_RATIO_LOW} screening band, indicating a coarser population.`,
+    };
+  }
+  return {
+    character: "mixed_mineral",
+    basis: `${stem} — within the ${FINES_RATIO_LOW}–${FINES_RATIO_HIGH} screening band, indicating a mixed population.`,
+  };
+}
+
+/** Water body type carries genuine information about what the solids will be. */
+function characterFromWaterBodyType(
+  type: WaterBodyType,
+): { character: ParticleCharacter; basis: string } | undefined {
+  switch (type) {
+    case "lake_reservoir":
+      return {
+        character: "silt",
+        basis:
+          "Standing water has a long residence time, so coarse material settles out before the " +
+          "abstraction point and the remaining suspended load is dominated by the fine fraction " +
+          "that does not settle. Inferred from the water body type, not measured here.",
+      };
+    case "estuary_coastal":
+      return {
+        character: "clay",
+        basis:
+          "Estuarine and coastal waters are typically dominated by fine cohesive sediment, often " +
+          "flocculated by salinity. Inferred from the water body type, not measured here.",
+      };
+    case "groundwater":
+      return {
+        character: "mixed_mineral",
+        basis:
+          "Groundwater normally carries a low and fine solids load, having been filtered through " +
+          "the aquifer matrix; visible solids are more often mobilised from the borehole or the " +
+          "distribution system than from the formation. Inferred from the water body type.",
+      };
+    default:
+      return undefined;
+  }
+}
+
 export function describeParticleCharacter(c: ParticleCharacter): string {
   switch (c) {
     case "sand":
@@ -198,6 +302,8 @@ function mergeFragment(site: SiteData, f: SiteDataFragment): void {
   if (f.particleCharacter && site.particleCharacter === "unknown") {
     site.particleCharacter = f.particleCharacter;
     site.particleCharacterProvenance = f.particleCharacterProvenance ?? "inferred";
+    site.particleCharacterBasis =
+      f.particleCharacterBasis ?? `Declared by the ${f.report.providerName} provider.`;
   }
 }
 
@@ -235,6 +341,9 @@ export async function getSiteData(
     landUseNotes: [],
     particleCharacter: "unknown",
     particleCharacterProvenance: "assumed",
+    particleCharacterBasis:
+      "Not yet determined - no evidence about this site's solids has been considered.",
+    siteSpecific: false,
     data: [],
     providerReports: [],
     unknowns: [],
@@ -280,6 +389,11 @@ export async function getSiteData(
     if (stated) {
       site.particleCharacter = stated;
       site.particleCharacterProvenance = "inferred";
+      site.particleCharacterBasis =
+        `Stated by the user in the notes supplied with the site query ("${options.userNotes
+          .trim()
+          .slice(0, 120)}"). This is the user's own description, not a measurement, but it ` +
+        "outranks anything the application would otherwise infer.";
       site.data.push({
         parameter: "Solids character (as described by the user)",
         value: describeParticleCharacter(stated),
@@ -328,7 +442,7 @@ export async function getSiteData(
 
 /** Adds the derived characterisation, assumptions and unknowns. */
 export function finaliseSite(site: SiteData): SiteData {
-  // Water body type: fall back to an inference only where evidence supports it.
+  // Water body type: from retrieved records first, then from the user's own words.
   if (site.waterBodyType === "unknown" && site.waterBody) {
     site.waterBodyType = "river";
     site.data.push({
@@ -338,6 +452,68 @@ export function finaliseSite(site: SiteData): SiteData {
       confidence: "medium",
       source: `Inferred from the presence of a named river ("${site.waterBody}") in the retrieved records.`,
     });
+  }
+  if (site.waterBodyType === "unknown") {
+    const fromText = waterBodyTypeFromText(site.query);
+    if (fromText) {
+      site.waterBodyType = fromText;
+      site.data.push({
+        parameter: "Water body type",
+        value: fromText.replace(/_/g, "/"),
+        provenance: "inferred",
+        confidence: "low",
+        source: `Read from the wording of the site query ("${site.query}").`,
+        notes:
+          "Inferred from what you typed, not from a lookup. Correct it in conversation if it is wrong.",
+      });
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Derive the solids character from the evidence actually gathered.
+   * Priority: the user's own statement (already set above) > archived
+   * water-quality evidence > the water body type > nothing.
+   * ------------------------------------------------------------------ */
+  if (site.particleCharacter === "unknown") {
+    const fromWq = characterFromWaterQuality(site);
+    const fromType = fromWq ? undefined : characterFromWaterBodyType(site.waterBodyType);
+    const derived = fromWq ?? fromType;
+
+    if (derived) {
+      site.particleCharacter = derived.character;
+      site.particleCharacterProvenance = "inferred";
+      site.particleCharacterBasis = derived.basis;
+      site.data.push({
+        parameter: "Solids character (inferred by the application)",
+        value: describeParticleCharacter(derived.character),
+        provenance: "inferred",
+        confidence: "low",
+        source: fromWq
+          ? "Inferred from archived water-quality measurements near the site."
+          : "Inferred from the type of water body.",
+        notes: derived.basis,
+      });
+    }
+  }
+
+  /* ------------------------------------------------------------------ *
+   * Is this result actually about THIS site?
+   *
+   * If nothing site-specific fed the assessment, the matrix below is the
+   * default and would be identical for any other location. That has to be
+   * said plainly rather than presented as an analysis.
+   * ------------------------------------------------------------------ */
+  const hasRealEvidence = site.data.some(
+    (d) => d.provenance === "measured" || d.provenance === "published",
+  );
+  site.siteSpecific =
+    site.particleCharacter !== "unknown" || site.psd !== undefined || hasRealEvidence;
+
+  if (site.particleCharacter === "unknown") {
+    site.particleCharacterBasis =
+      "No evidence about this site's solids was found by any provider, and none was supplied, " +
+      "so the analysis fell back to a deliberately broad default. Nothing about this site " +
+      "influenced the particle population used.";
   }
 
   // Particle character: if still unknown, record it as an explicit assumption.
@@ -377,6 +553,14 @@ export function finaliseSite(site: SiteData): SiteData {
     "Feed flow rate and available feed pressure at the intended installation are unknown, " +
       "so hydraulic compatibility with any hydrocyclone cannot be confirmed.",
   );
+
+  if (!site.siteSpecific) {
+    site.unknowns.unshift(
+      "Everything about this particular site. No provider returned any measured or published " +
+        "datum for it, so the assessment below is the application's default and would be " +
+        "identical for any other location.",
+    );
+  }
 
   // Deduplicate while preserving order.
   site.unknowns = [...new Set(site.unknowns)];
