@@ -10,6 +10,50 @@ change it, commit. Or edit locally and `git push`. After any change, run
 
 ---
 
+## FIRST: if every site gives the same answer
+
+Go to **http://localhost:3000/diagnose**, type the site, press Diagnose.
+
+It runs every lookup for real and tells you in plain English which step failed
+and what to do. It also prints a **matrix fingerprint** — diagnose two different
+sites, and if that string is identical, nothing site-specific is reaching the
+engine.
+
+### The most common cause: geocoding failed
+
+Every lookup except your own notes needs coordinates. If geocoding fails, the
+river gauges, the water-quality archive and the geology lookup **all skip**, so
+nothing is known about the solids and every site returns the default. One
+failure, everything downstream dead.
+
+The usual fixes, in order:
+
+1. **Set a User-Agent.** Create a file called `.env.local` in the project root:
+
+   ```
+   SITE_DATA_USER_AGENT=my-research-tool (your.name@example.com)
+   ```
+
+   Nominatim rejects generic User-Agents with HTTP 403. Restart after saving.
+
+2. **Check Node can reach the internet.** A corporate proxy, VPN or firewall can
+   block it even when your browser is fine. The diagnostic prints the exact URL
+   it tried — paste that into a browser. If it works there but failed in the app,
+   it is a network problem, not a code problem.
+
+3. **Try a simpler place name.** The app now tries the full phrase, then the last
+   comma-separated part, then the first — so "Kinness Burn, St Andrews" falls
+   back to "St Andrews" automatically. If all three fail, try just the town.
+
+### Outside England
+
+The two Environment Agency lookups are **England-only**. In Scotland, Wales or
+Northern Ireland they will never return anything, by design — so Kinness Burn
+will never get gauge or water-quality data. Geology is the one that should still
+work there.
+
+---
+
 ## The 30-second mental model
 
 The app produces its answer from exactly **three** things:
@@ -280,7 +324,7 @@ couldn't.
 | # | File | What it does | Does it change your answer? |
 |---|---|---|---|
 | 1 | `local-knowledge.ts` | Reads your `data/sites.ts` notes | **YES** — if you set `particleCharacter` |
-| 2 | `geocode.ts` | Turns the name into coordinates (OpenStreetMap) | No, but everything below needs it |
+| 2 | `geocode.ts` | Name → coordinates (Open-Meteo, then Nominatim) | No — **but everything below dies without it** |
 | 3 | `ea-flood.ts` | Nearest river gauge, level trend, 72 h rainfall | **No** — context only |
 | 4 | `ea-water-quality.ts` | Archived suspended solids + turbidity | **YES** — if it finds *both* |
 | 5 | `bgs-geology.ts` | Bedrock + superficial deposits from BGS | **YES** — lithology sets the solids character |
@@ -349,7 +393,7 @@ measured data instead of placeholders.
 ## If you break something
 
 ```bash
-npm test          # 105 tests — tells you what broke
+npm test          # 111 tests — tells you what broke
 npm run typecheck # catches typos in the data files
 git checkout .    # throw away your changes and start again
 ```
