@@ -1,70 +1,90 @@
 # Build log
 
-Honest status of every block. A block is "done" only when it has been proven to
-work, not when it has been written.
+Honest status of every block. A block is "done" only when something has proven
+it works, not when it has been written.
 
 | # | Block | Status | Proven by |
 |---|-------|--------|-----------|
-| 1 | Data schemas + files | **done** | `npm test` — schema and integrity tests |
-| 2 | Data-source probe | **v1 run, v2 pending** | v1 run on a networked machine; results below |
-| 3 | Site + waterbody resolution | not started | blocked on block 2 results |
-| 4 | Site research providers | not started | blocked on block 2 results |
+| 1 | Data schemas + files | **done** | 24 tests, incl. 8 that feed the validator broken data |
+| 2 | Data-source probe | **done** | v1 + v2 run live on two real sites |
+| 3 | Site + waterbody resolution | next | |
+| 4 | Geology + catchment providers | next | |
 | 5 | Screening engine | not started | |
 | 6 | UI | not started | |
 | 7 | AI conversation layer | not started | |
 
-## Probe v1 results (run 2026-08-28, real network)
+## Probe results (run live, two sites)
 
-Two sites: "Tilford, River Wey" and "Kinness Burn, St Andrews".
+"Tilford, River Wey" (England) and "Kinness Burn, St Andrews" (Scotland).
 
-| Source | Result | Verdict |
+### Kept — returned real data on both sites
+
+| Source | What it gives | Notes |
 |---|---|---|
-| Geocoding (Open-Meteo + Nominatim) | Both work | **Keep** |
-| EA real-time level + rainfall | Works in England; empty in Scotland, as expected | **Keep**, slow (10-18 s) |
-| BGS service discovery | `BGS_Detailed_Geology`, layers 3 = Superficial, 4 = Bedrock | **Keep** |
-| BGS identify at a point | Responded, **returned nothing** | **Must fix** — this is the main differentiator |
-| EA Water Quality Archive | HTTP 404 | Wrong URL; retrying other forms |
-| EA Catchment Data Explorer | HTTP 404 | Wrong URL; retrying other forms |
-| SEPA river levels | `fetch failed` (DNS/TLS) | Retrying other hosts |
+| **BGS geology via WMS GetFeatureInfo** | Bedrock, superficial deposits, artificial ground, mass movement at a point | **The foundation.** REST `identify` returns empty every time; WMS works. |
+| **NRFA** (National River Flow Archive) | Nearest gauged catchment, area, river, catchment properties | **UK-wide** — the only catchment source covering Scotland |
+| Nominatim geocoding | Coordinates and candidate places | The only geocoder that resolves river names |
+| EA real-time level + rainfall | Stage trend, antecedent rainfall | England only. Slow (3–8 s). Context, not foundation. |
 
-Two findings that matter more than the pass/fail list:
+### Dropped — failed comprehensively on both sites
 
-**The probe itself was misleading.** It reported "ok" for a response that
-contained no records, which hid the BGS failure and made an empty Scottish EA
-result look like a success. v2 distinguishes *responded* from *responded with
-data*, and only the latter counts.
+| Source | Attempts | Result |
+|---|---|---|
+| EA Water Quality Archive | 5 URL forms | All 404/403. API moved or withdrawn. |
+| EA Catchment Data Explorer | 5 URL forms | All 404. Same. |
+| BGS REST `identify` | 6 variants, inc. BNG coords, explicit layer ids, wide extents | Always `results: []`. Superseded by WMS. |
+| SEPA river levels | 2 hosts | `ENOTFOUND`. |
+| Open-Meteo geocoding | every query | 0 items — a settlement gazetteer, holds no river names. |
+
+Nothing is retried hopefully. A source that failed on both sites is gone, and
+the model is smaller for it.
+
+### Two findings that mattered more than the pass/fail list
+
+**The v1 probe reported empty responses as "ok".** That hid the BGS failure
+entirely, and made an empty Scottish EA result look like a success. The probe
+now separates *responded* from *responded with data*.
 
 **Geocoding silently changed the question.** "Tilford, River Wey" matched
-nothing, so it fell back to "River Wey" and returned a generic point in Surrey
-about 4 km from Tilford. The screening would have been for the wrong place, with
-no indication. Block 3 must confirm the waterbody with the user rather than
-quietly accepting a fallback match.
+nothing, fell back to "River Wey", and returned a generic Surrey point about
+4 km from Tilford. A screening would have been produced for the wrong reach with
+no indication at all. Block 3 must confirm the waterbody with the user; the
+probe now lists every candidate place rather than silently taking the first.
 
-## What v2 tests
+## The model, now that it is narrowed
 
-- **BGS identify, six ways** — explicit layer ids (scale-dependent visibility is
-  the prime suspect, since `layers=all` means "all *visible*"), wider extents,
-  larger tolerance, British National Grid coordinates, and WMS GetFeatureInfo as
-  a different protocol. Plus the `GeologyOfBritain` and `GeoIndex_Onshore`
-  service folders.
-- **NRFA** (National River Flow Archive) — new, and **UK-wide**, so it covers
-  Kinness Burn where the EA cannot. Holds catchment area, river name and
-  catchment properties.
-- **EA water quality and catchment** — five URL forms each.
-- **SEPA** — three alternative hosts.
+```
+site + waterbody
+      |
+      v
+Nominatim  ->  candidate places  ->  user confirms which one
+      |
+      v
+BGS geology at that point        <- foundation: what the catchment sheds
+(bedrock + superficial)
+      +
+NRFA catchment properties        <- catchment size, responsiveness
+      +
+EA level / rainfall              <- England only, context
+      |
+      v
+particle character  ->  screening
+```
 
-`scripts/lib/bng.mjs` converts WGS84 to British National Grid (Helmert plus
-transverse Mercator), verified against St Andrews and OS HQ Southampton.
+Geology is the foundation because it is the only source that both works
+everywhere in the UK and genuinely predicts what the suspended mineral load is
+made of. Everything else is context around it.
 
-## Block 2 is the gate
+## What v3 does
 
-Blocks 3 and 4 are deliberately **not started**. Building providers against
-unverified API shapes is precisely what produced the previous useless version.
+v3 stops asking which sources work and extracts the exact field names from the
+four that do, so the providers are written against reality rather than guesses:
 
-`scripts/probe.mjs` calls every candidate source and records exactly what comes
-back. It must be run on a machine with internet access — the development
-sandbox has none. Its output determines what gets built next, and what gets
-dropped.
+- every BGS WMS layer at the point, with all attribute names and values printed;
+- the full NRFA field list, highlighting anything bearing on sediment character
+  (geology, aquifer, BFI, permeability, soil, land cover);
+- all 21 services in the BGS `GeoIndex_Onshore` folder, so far unexamined;
+- every candidate place from the geocoder, for the disambiguation step.
 
 ## Decisions taken, and why
 
@@ -79,3 +99,8 @@ from the file itself.
 **The query log is keyed on `siteId` + `waterbodyId`.** Not on the text the user
 typed. Two spellings of the same burn are the same site, and must not produce
 two log entries.
+
+**A source that fails is dropped, not retried hopefully.** The previous version
+of this project shipped providers for four sources that had never returned
+anything, and produced a confident screening regardless. Smaller and working
+beats larger and hopeful.
