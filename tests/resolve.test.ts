@@ -157,3 +157,42 @@ describe("deciding whether to ask", () => {
     expect(r.candidates.length).toBeGreaterThan(0);
   });
 });
+
+describe("distance sanity (the Bedford/Pennsylvania failure)", () => {
+  const BEDFORD_OUSE: NrfaStation[] = [
+    { id: 33005, name: "Bedford Ouse at Thornborough Mill", river: "Bedford Ouse",
+      easting: 473000, northing: 233000, "catchment-area": 388.5 },
+  ];
+
+  it("rejects a name match on the wrong continent", () => {
+    // Anchored in Pennsylvania, as the probe actually did: BNG is meaningless
+    // there and the station sits ~7,000 km away.
+    const parsed = parseQuery("Bedford, Great Ouse");
+    const wrongAnchor = { easting: -6034632, northing: 2941720 };
+    expect(rankStations(parsed, BEDFORD_OUSE, 5, wrongAnchor)).toHaveLength(0);
+  });
+
+  it("accepts the same match from the right anchor", () => {
+    const parsed = parseQuery("Bedford, Great Ouse");
+    const rightAnchor = { easting: 474000, northing: 234000 };
+    expect(rankStations(parsed, BEDFORD_OUSE, 5, rightAnchor).length).toBeGreaterThan(0);
+  });
+
+  it("offers both parts as anchors when neither carries a water word", () => {
+    // "Great Ouse" contains no river/burn/beck, so the split cannot be made
+    // from the words alone.
+    const p = parseQuery("Bedford, Great Ouse");
+    expect(p.ambiguous).toBe(true);
+    expect(p.anchorCandidates).toEqual(["Bedford", "Great Ouse"]);
+  });
+
+  it("breaks ties on distance, picking the nearer reach", () => {
+    const twoReaches: NrfaStation[] = [
+      { id: 1, name: "Test at Timsbury", river: "Test", easting: 435000, northing: 124000 },
+      { id: 2, name: "Test at Broadlands", river: "Test", easting: 435000, northing: 119000 },
+    ];
+    const anchor = { easting: 435197, northing: 121201 }; // Romsey, real BNG
+    const ranked = rankStations(parseQuery("Romsey, River Test"), twoReaches, 5, anchor);
+    expect(ranked[0].distanceKm!).toBeLessThan(ranked[1].distanceKm!);
+  });
+});

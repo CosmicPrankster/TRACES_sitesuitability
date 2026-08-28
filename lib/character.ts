@@ -92,6 +92,17 @@ export interface GeologyCorroboration {
   coarseness: number;
   /** e.g. "At this point BGS maps ... over ... bedrock (Sandstone)." */
   statement: string;
+  /**
+   * True when the bedrock is crystalline - igneous or metamorphic. NRFA classes
+   * all such rock "low permeability", but permeability describes how water
+   * moves through rock, NOT the grain size of what it weathers to. Granite and
+   * psammite weather to coarse sand. Where this is set and the mapped
+   * superficial deposits are coarse, the geology is trusted over the
+   * permeability class.
+   */
+  bedrockIsCrystalline?: boolean;
+  /** True when the superficial deposit is coarse and not the river's own alluvium. */
+  coarseSuperficial?: boolean;
 }
 
 export function inferCharacter(
@@ -207,7 +218,33 @@ export function inferCharacter(
 
     evidence.push({ field: "bgs-geology", value: geology.coarseness, means: "mapped geology at the point" });
 
-    if (geologyAgrees === true) {
+    // The permeability trap. NRFA classes crystalline rock "low permeability",
+    // which the bedrock rule above reads as "yields fines". For granite and
+    // psammite that is simply wrong: they weather to coarse sand. Where the
+    // mapped superficial deposits are also coarse, the geology is the better
+    // evidence and it overrides.
+    const permeabilityMisleading =
+      geology.bedrockIsCrystalline === true &&
+      geology.coarseSuperficial === true &&
+      coarseness < 0 &&
+      geology.coarseness > 0.3;
+
+    if (permeabilityMisleading) {
+      coarseness = 0.6 * geology.coarseness;
+      geologyAgrees = null;
+      reasoning.push(
+        `${geology.statement} The catchment figures class this bedrock as low-permeability, and ` +
+          "on its own that would read as a fine-grained catchment — but permeability describes " +
+          "how water moves through rock, not the size of the grains it weathers to. Crystalline " +
+          "rock is impermeable and still weathers to coarse sand, and the mapped superficial " +
+          "deposits here are coarse. The mapped geology is therefore used in preference to the " +
+          "permeability class.",
+      );
+      wouldChangeThis.push(
+        "This site's reading rests on the mapped geology overriding the catchment permeability " +
+          "class. A raw water sample would settle whether that was the right call.",
+      );
+    } else if (geologyAgrees === true) {
       // Agreement nudges, it does not dominate: one polygon is not a catchment.
       coarseness += 0.15 * Math.sign(geology.coarseness);
       reasoning.push(

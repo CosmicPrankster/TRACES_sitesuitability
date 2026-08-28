@@ -52,6 +52,11 @@ export interface ParsedQuery {
   allTokens: string[];
   /** True when the two parts could not be told apart. */
   ambiguous: boolean;
+  /**
+   * Parts to try as the geocoding anchor, in order, when `settlement` could not
+   * be identified. Whichever resolves to a populated place is the settlement.
+   */
+  anchorCandidates?: string[];
 }
 
 /**
@@ -81,8 +86,11 @@ export function parseQuery(raw: string): ParsedQuery {
         ambiguous: false,
       };
     }
-    // Both or neither look like water: cannot tell them apart.
-    return { raw, allTokens, ambiguous: true };
+    // Neither part carries a water word - "Bedford, Great Ouse" is the case that
+    // matters. We cannot tell them apart from the words alone, so both are
+    // offered as anchor candidates and the caller decides by what each one
+    // actually geocodes to: a settlement resolves to a town, a river does not.
+    return { raw, allTokens, ambiguous: true, anchorCandidates: parts };
   }
 
   // A single part: is it water, or a place?
@@ -122,6 +130,8 @@ export interface StationMatch {
   reason: string;
   matchedRiver: boolean;
   matchedPlace: boolean;
+  /** Distance from the geocoded anchor, when one was supplied. */
+  distanceKm?: number;
 }
 
 /**
@@ -166,7 +176,11 @@ export function scoreStation(parsed: ParsedQuery, station: NrfaStation): Station
     score = 0.45;
     reason = `"${station.name}" is at the right place, but on a different watercourse.`;
   } else if (meaningful.length > 0 && overlap.length > 0) {
-    score = 0.3 * (overlap.length / meaningful.length);
+    // Fallback for a query that could not be split, e.g. "Bedford, Great Ouse"
+    // where neither part carries a water word. Scaled to top out just below a
+    // place-only match, so a partial overlap is a candidate but never outranks
+    // a real river or place match.
+    score = 0.45 * (overlap.length / meaningful.length);
     reason = `"${station.name}" partly matches (${overlap.join(", ")}).`;
   } else {
     reason = "No match.";
@@ -175,16 +189,52 @@ export function scoreStation(parsed: ParsedQuery, station: NrfaStation): Station
   return { station, score, reason, matchedRiver, matchedPlace };
 }
 
-/** Best station matches, strongest first. Only genuine candidates are returned. */
+/**
+ * How far a name match may sit from the geocoded anchor before it is rejected.
+ *
+ * Without this, "Bedford, Great Ouse" geocoded to Bedford County, Pennsylvania
+ * and still name-matched "Bedford Ouse at Thornborough Mill" - 7,048 km away.
+ * A name that matches on the wrong continent is not a match.
+ */
+export const MAX_MATCH_DISTANCE_KM = 40;
+
+export interface Anchor {
+  easting: number;
+  northing: number;
+}
+
+/** Straight-line distance in km between a station and the anchor. */
+export function distanceKm(station: NrfaStation, anchor: Anchor): number {
+  return Math.hypot(station.easting - anchor.easting, station.northing - anchor.northing) / 1000;
+}
+
+/**
+ * Best station matches, strongest first.
+ *
+ * When an anchor is given, matches further than MAX_MATCH_DISTANCE_KM are
+ * dropped outright, and distance breaks ties between equal name scores - which
+ * is what picks "Test at Timsbury" over an identically-named reach elsewhere.
+ */
 export function rankStations(
   parsed: ParsedQuery,
   stations: NrfaStation[],
   limit = 5,
+  anchor?: Anchor,
 ): StationMatch[] {
   return stations
-    .map((s) => scoreStation(parsed, s))
+    .map((s) => {
+      const m = scoreStation(parsed, s);
+      const km = anchor ? distanceKm(s, anchor) : undefined;
+      return { ...m, distanceKm: km };
+    })
     .filter((m) => m.score >= 0.3)
-    .sort((a, b) => b.score - a.score || (a.station.name ?? "").localeCompare(b.station.name ?? ""))
+    .filter((m) => m.distanceKm === undefined || m.distanceKm <= MAX_MATCH_DISTANCE_KM)
+    .sort(
+      (a, b) =>
+        b.score - a.score ||
+        (a.distanceKm ?? 0) - (b.distanceKm ?? 0) ||
+        (a.station.name ?? "").localeCompare(b.station.name ?? ""),
+    )
     .slice(0, limit);
 }
 

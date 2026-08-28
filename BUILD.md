@@ -202,6 +202,57 @@ four that do, so the providers are written against reality rather than guesses:
 - all 21 services in the BGS `GeoIndex_Onshore` folder, so far unexamined;
 - every candidate place from the geocoder, for the disambiguation step.
 
+## Validated against four UK rivers
+
+Four geologically distinct sites were probed live and the results checked
+against an independent prior written down beforehand. Three real defects came
+out of it — all of them silent, all of them now fixed and pinned by tests.
+
+| Site | BGS bedrock | NRFA | Outcome |
+|---|---|---|---|
+| Test at Romsey | Wittering Fm, "Sand, silt and clay" | BFI 0.63 | Resolved to the wrong river — see below |
+| Tees at Middleton | Alston Fm, "Limestone, sandstone, siltstone and mudstone" | BFI 0.31, arable 0.0001, SAAR 1585 | Clean name match, 0.4 km |
+| Great Ouse at Bedford | *(none — see below)* | BFI 0.47, arable 0.445 | Geocoded to Pennsylvania |
+| Spey at Boat of Garten | Grampian Group, "Micaceous psammite" | BFI 0.41, low-perm bedrock 1.0 | Exposed the permeability trap |
+
+### Defect 1 — geocoding left the country
+
+"Bedford" resolved to **Bedford County, Pennsylvania**, producing a British
+National Grid easting of −6,034,632. Every lookup downstream was for the wrong
+continent, and nothing said so.
+
+Two fixes: `countrycodes=gb` on every geocode, and preferring a result whose
+type is a populated place, since "Bedford, Great Ouse" carries no water word and
+either half might be the settlement.
+
+### Defect 2 — a name match 7,000 km away still counted
+
+Anchored in Pennsylvania, the resolver still matched "Bedford Ouse at
+Thornborough Mill" on name alone. A name that matches on the wrong continent is
+not a match: matches beyond `MAX_MATCH_DISTANCE_KM` (40 km) are now rejected,
+and a rejection is reported as evidence the anchor is wrong.
+
+At Romsey the reverse happened — nearest-by-distance picked *Tadburn Lake*, a
+19 km² tributary, over *Test at Timsbury* 2.2 km away. A river-name match now
+beats raw proximity.
+
+### Defect 3 — permeability is not grain size
+
+The important one. NRFA classes the Spey's bedrock **low-permeability 1.0**,
+which read as a fine-grained catchment. But BGS maps it as *Micaceous psammite*
+under *Glaciofluvial sand, gravel and boulders*, and the Spey is in fact a
+famously sandy, gravelly river.
+
+Permeability describes how water moves **through** rock, not the size of the
+grains it weathers **to**. Crystalline rock is impermeable and still weathers to
+coarse sand — for granite and psammite the two come apart completely.
+
+Where the bedrock is crystalline *and* the mapped superficial deposits are
+coarse, the geology now overrides the permeability class, and the report says
+why. `psammite` (metamorphosed sandstone, coarse) and `pelite` (metamorphosed
+mudstone, fine) are also now distinguished, which a single "metamorphic" rule
+could not do.
+
 ## Decisions taken, and why
 
 **Everything guessed is labelled `"guessed"` in the data itself**, not in a

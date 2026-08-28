@@ -82,15 +82,25 @@ console.log(`  ${c.dim}waterbody:  ${waterbodyPart ?? "(none detected)"}${c.rese
 console.log(`  ${c.dim}settlement: ${settlementPart ?? "(none detected)"}${c.reset}`);
 
 // Anchor on the settlement: a town is a point, a river is a line.
-const anchorQueries = [settlementPart, query, waterbodyPart].filter(Boolean);
+// Two hard-won constraints:
+//  - countrycodes=gb. Without it "Bedford" resolved to Bedford County,
+//    Pennsylvania, and every lookup downstream was for the wrong continent.
+//  - prefer a POPULATED PLACE. Where the query carries no water word
+//    ("Bedford, Great Ouse") either part might be the settlement, so both are
+//    tried and whichever resolves to a town or village wins.
+const SETTLEMENT_TYPES = ["city", "town", "village", "hamlet", "suburb", "administrative", "locality"];
+const anchorQueries = [settlementPart, waterbodyPart, query].filter(Boolean);
 let lat = null, lon = null, resolvedName = null, matchedVariant = null, allMatches = [];
 
 for (const v of anchorQueries) {
-  const body = await get(`geocode "${v}"`,
-    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&q=${encodeURIComponent(v)}`);
+  const body = await get(`geocode "${v}" (GB only)`,
+    `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1` +
+    `&countrycodes=gb&q=${encodeURIComponent(v)}`);
   if (Array.isArray(body) && body.length) {
+    const settlement = body.find((r) => SETTLEMENT_TYPES.includes(r.type)) ?? body[0];
     allMatches = body.map((r) => ({ name: r.display_name, type: r.type, class: r.class, lat: +r.lat, lon: +r.lon }));
-    lat = +body[0].lat; lon = +body[0].lon; resolvedName = body[0].display_name; matchedVariant = v;
+    lat = +settlement.lat; lon = +settlement.lon;
+    resolvedName = settlement.display_name; matchedVariant = v;
     break;
   }
 }
@@ -192,7 +202,31 @@ if (list?.data) {
       return { ...s, km: Math.hypot(s.easting - bng.easting, s.northing - bng.northing) / 1000, hits };
     });
 
-  const named = withDist.filter((s) => s.hits.length >= 2).sort((a, b) => a.km - b.km);
+  // A name that matches 7,000 km away is not a match. This is what let
+  // "Bedford Ouse at Thornborough Mill" pass while anchored in Pennsylvania.
+  const MAX_MATCH_KM = 40;
+  const named = withDist
+    .filter((s) => s.hits.length >= 2 && s.km <= MAX_MATCH_KM)
+    .sort((a, b) => a.km - b.km);
+  const rejected = withDist.filter((s) => s.hits.length >= 2 && s.km > MAX_MATCH_KM);
+  if (rejected.length) {
+    console.log(`  ${c.yellow}→ ${rejected.length} name match(es) REJECTED as too far from the anchor ` +
+      `(nearest ${rejected.sort((a, b) => a.km - b.km)[0].km.toFixed(0)} km) — the anchor is probably wrong${c.reset}`);
+  }
+
+  // A river-only match still beats nearest-by-distance: at Romsey the nearest
+  // gauge is Tadburn Lake, a 19 km2 tributary, not the Test.
+  const riverTokens = (waterbodyPart ?? "").toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 2 && !WATER_WORDS.includes(t));
+  const onRiver = riverTokens.length
+    ? withDist.filter((s) => s.km <= MAX_MATCH_KM &&
+        riverTokens.every((t) => String(s.river ?? "").toLowerCase().split(/[^a-z0-9]+/).includes(t)))
+        .sort((a, b) => a.km - b.km)
+    : [];
+  if (!named.length && onRiver.length) {
+    console.log(`  ${c.green}${c.bold}→ RIVER MATCH (right river, nearest reach):${c.reset}`);
+    onRiver.slice(0, 3).forEach((s) =>
+      console.log(`     ${c.green}${s.id} ${s.name} - ${s.km.toFixed(1)} km, ${s["catchment-area"]} km²${c.reset}`));
+  }
   if (named.length) {
     console.log(`  ${c.green}${c.bold}→ NAME MATCH (both river and place):${c.reset}`);
     named.slice(0, 3).forEach((s) =>
@@ -204,7 +238,7 @@ if (list?.data) {
   console.log(`  ${c.dim}→ nearest by distance:${c.reset}`);
   byDist.slice(0, 5).forEach((s) =>
     console.log(`     ${c.dim}${s.id} ${s.name} (${s.river}) - ${s.km.toFixed(1)} km, ${s["catchment-area"]} km²${c.reset}`));
-  nearest = nearest ?? byDist[0];
+  nearest = nearest ?? onRiver[0] ?? byDist[0];
 }
 if (nearest) {
   const full = await get(`full record for ${nearest.id} (${nearest.name})`,

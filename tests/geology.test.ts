@@ -116,3 +116,27 @@ describe("summarising the point", () => {
     expect(s.reasoning.join(" ")).toMatch(/sand-grade quartz grains/i);
   });
 });
+
+describe("Highland lithologies (Spey, real data)", () => {
+  it("reads psammite as coarse - it is metamorphosed sandstone", () => {
+    const p = readLithology("Micaceous psammite")!;
+    expect(p.coarseness).toBeGreaterThan(0.3);
+    expect(p.meaning).toMatch(/metamorphosed sandstone/i);
+    expect(p.meaning).toMatch(/coarser than its 'low permeability' classification suggests/i);
+  });
+
+  it("reads pelite as fine - it is metamorphosed mudstone", () => {
+    const p = readLithology("Pelite")!;
+    expect(p.coarseness).toBeLessThan(0);
+  });
+
+  it("distinguishes the two, which a single 'metamorphic' rule could not", () => {
+    expect(readLithology("Psammite")!.coarseness)
+      .toBeGreaterThan(readLithology("Pelite")!.coarseness);
+  });
+
+  it("reads the real Spey superficial deposit as coarse", () => {
+    const s = readLithology("Sand, gravel and boulders")!;
+    expect(s.coarseness).toBeGreaterThan(0.5);
+  });
+});

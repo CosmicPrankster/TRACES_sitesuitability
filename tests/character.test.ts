@@ -212,3 +212,76 @@ describe("geology corroboration", () => {
     expect(r.evidence.map((e) => e.field)).toContain("bgs-geology");
   });
 });
+
+describe("the permeability trap (Spey at Boat of Garten, real data)", () => {
+  /**
+   * NRFA 8005: low-perm-bedrock 1.0, bfihost19 0.412, arable 0.0013.
+   * On those figures alone the catchment reads as fine-grained.
+   *
+   * BGS at the point: bedrock "Micaceous psammite" (Grampian Group,
+   * metamorphic), superficial "Sand, gravel and boulders" (Glaciofluvial sheet
+   * deposits, Devensian).
+   *
+   * The Spey is in fact a famously sandy, gravelly river. NRFA's permeability
+   * class is misleading here because it describes water movement through rock,
+   * not the grain size of what that rock weathers to.
+   */
+  const SPEY = {
+    id: 8005,
+    name: "Spey at Boat of Garten",
+    "catchment-area": 1267.8,
+    "high-perm-bedrock": null,
+    "moderate-perm-bedrock": null,
+    "low-perm-bedrock": 1,
+    "mixed-perm-bedrock": null,
+    bfihost: 0.47,
+    bfihost19: 0.412,
+    "lcm2023-cropland": 0.0013,
+    "lcm2023-built-up-areas": 0.0044,
+    "saar-1991-2020": 1439,
+  };
+
+  it("reads fine from the catchment figures alone, which is the trap", () => {
+    const r = inferCharacter(fromNrfaRecord(SPEY))!;
+    expect(["silt", "clay"]).toContain(r.character);
+  });
+
+  it("comes out coarse once the mapped geology is taken into account", () => {
+    const r = inferCharacter(fromNrfaRecord(SPEY), {
+      coarseness: 0.72, // sand, gravel and boulders over psammite
+      statement:
+        "At this point BGS maps superficial deposits of Glaciofluvial sheet deposits, Devensian " +
+        "(Sand, gravel and boulders), over Grampian Group bedrock (Micaceous psammite).",
+      bedrockIsCrystalline: true,
+      coarseSuperficial: true,
+    })!;
+    expect(["sand", "mixed_mineral"]).toContain(r.character);
+  });
+
+  it("explains the override in terms of what permeability actually means", () => {
+    const r = inferCharacter(fromNrfaRecord(SPEY), {
+      coarseness: 0.72, statement: "x", bedrockIsCrystalline: true, coarseSuperficial: true,
+    })!;
+    const prose = r.reasoning.join(" ");
+    expect(prose).toMatch(/permeability describes how water moves through rock, not the size of the grains/i);
+    expect(prose).toMatch(/impermeable and still weathers to coarse sand/i);
+    expect(r.wouldChangeThis.join(" ")).toMatch(/overriding the catchment permeability class/i);
+  });
+
+  it("does not fire the override on a genuinely fine sedimentary catchment", () => {
+    // Mudstone is impermeable AND fine. Nothing to override.
+    const r = inferCharacter(
+      { lowPermBedrock: 1, bfihost: 0.4, cropland: 0.5 },
+      { coarseness: -0.7, statement: "x", bedrockIsCrystalline: false, coarseSuperficial: false },
+    )!;
+    expect(["silt", "clay"]).toContain(r.character);
+    expect(r.reasoning.join(" ")).not.toMatch(/permeability describes how water moves/i);
+  });
+
+  it("does not fire it when the superficial deposits are fine too", () => {
+    const r = inferCharacter(fromNrfaRecord(SPEY), {
+      coarseness: -0.6, statement: "x", bedrockIsCrystalline: true, coarseSuperficial: false,
+    })!;
+    expect(["silt", "clay"]).toContain(r.character);
+  });
+});

@@ -114,7 +114,11 @@ const LITHOLOGY_RULES: { pattern: RegExp; coarseness: number; meaning: string }[
     meaning: "carbonate rock, which weathers to a fine carbonate load, often with a coarser insoluble residue" },
   { pattern: /\b(granite|basalt|dolerite|gabbro|andesite|rhyolite|tuff|igneous|volcanic)\b/i, coarseness: 0.2,
     meaning: "crystalline igneous rock, weathering to a mixed assemblage of dense mineral grains" },
-  { pattern: /\b(schist|gneiss|slate|phyllite|metamorphic|quartzite)\b/i, coarseness: 0.1,
+  { pattern: /\b(psammite|semipelite|quartzite)\b/i, coarseness: 0.5,
+    meaning: "metamorphosed sandstone, which weathers to sand-grade quartz and mica grains — coarser than its 'low permeability' classification suggests" },
+  { pattern: /\b(pelite|slate|phyllite)\b/i, coarseness: -0.5,
+    meaning: "metamorphosed mudstone, weathering to fine platy material" },
+  { pattern: /\b(schist|gneiss|metamorphic)\b/i, coarseness: 0.1,
     meaning: "metamorphic rock, weathering to a mixed assemblage spanning silt into sand" },
 ];
 
