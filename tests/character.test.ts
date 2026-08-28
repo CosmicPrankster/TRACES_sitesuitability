@@ -169,3 +169,46 @@ describe("refusing to guess", () => {
     }
   });
 });
+
+describe("geology corroboration", () => {
+  const WEY = {
+    "high-perm-bedrock": 0.7778, "moderate-perm-bedrock": 0.0926,
+    "low-perm-bedrock": 0.0001, "mixed-perm-bedrock": 0.1295,
+    bfihost19: 0.773, "lcm2023-cropland": 0.2614, "lcm2023-built-up-areas": 0.123,
+  };
+
+  it("reports agreement when BGS and the catchment point the same way", () => {
+    const r = inferCharacter(fromNrfaRecord(WEY), {
+      coarseness: 0.56, // sandstone-led, from the real Tilford geology
+      statement: "At this point BGS maps superficial deposits of Alluvium, over Folkestone Formation bedrock (Sandstone).",
+    })!;
+    expect(r.reasoning.join(" ")).toMatch(/agrees with the catchment properties/i);
+    expect(r.reasoning.join(" ")).toMatch(/two independent datasets/i);
+    expect(r.confidence).toBe("medium");
+  });
+
+  it("reports a disagreement rather than averaging it away, and drops confidence", () => {
+    const r = inferCharacter(fromNrfaRecord(WEY), {
+      coarseness: -0.7, // as if the site sat on a clay lens
+      statement: "At this point BGS maps London Clay Formation bedrock (Clay).",
+    })!;
+    expect(r.reasoning.join(" ")).toMatch(/does NOT agree/);
+    expect(r.reasoning.join(" ")).toMatch(/one polygon at the abstraction point/i);
+    expect(r.confidence).toBe("low");
+    expect(r.wouldChangeThis.join(" ")).toMatch(/disagreement/i);
+  });
+
+  it("keeps the catchment-wide reading when the two conflict", () => {
+    const withoutGeology = inferCharacter(fromNrfaRecord(WEY))!;
+    const withConflict = inferCharacter(fromNrfaRecord(WEY), {
+      coarseness: -0.7, statement: "x",
+    })!;
+    // The conflicting polygon does not flip the answer.
+    expect(withConflict.character).toBe(withoutGeology.character);
+  });
+
+  it("records the geology in the evidence trail", () => {
+    const r = inferCharacter(fromNrfaRecord(WEY), { coarseness: 0.56, statement: "x" })!;
+    expect(r.evidence.map((e) => e.field)).toContain("bgs-geology");
+  });
+});

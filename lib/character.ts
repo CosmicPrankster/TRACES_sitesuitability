@@ -81,7 +81,23 @@ export function hasEnoughToInfer(p: CatchmentProperties): boolean {
   return bedrockKnown || typeof p.bfihost === "number";
 }
 
-export function inferCharacter(p: CatchmentProperties): CharacterInference | null {
+/**
+ * Optional corroboration from BGS geology at the point.
+ * NRFA drives the inference because a river integrates its whole catchment;
+ * BGS names the specific rock and either backs the reading up or contradicts
+ * it. A contradiction is reported, not averaged away.
+ */
+export interface GeologyCorroboration {
+  /** -1..+1 from lib/geology summariseGeology. */
+  coarseness: number;
+  /** e.g. "At this point BGS maps ... over ... bedrock (Sandstone)." */
+  statement: string;
+}
+
+export function inferCharacter(
+  p: CatchmentProperties,
+  geology?: GeologyCorroboration,
+): CharacterInference | null {
   if (!hasEnoughToInfer(p)) return null;
 
   const reasoning: string[] = [];
@@ -181,6 +197,40 @@ export function inferCharacter(p: CatchmentProperties): CharacterInference | nul
     );
   }
 
+  /* --- 5. Geology corroboration --------------------------------------- */
+  let geologyAgrees: boolean | null = null;
+  if (geology) {
+    const catchmentSaysCoarse = coarseness > 0.1;
+    const geologySaysCoarse = geology.coarseness > 0.1;
+    const bothClear = Math.abs(coarseness) > 0.1 && Math.abs(geology.coarseness) > 0.1;
+    geologyAgrees = bothClear ? catchmentSaysCoarse === geologySaysCoarse : null;
+
+    evidence.push({ field: "bgs-geology", value: geology.coarseness, means: "mapped geology at the point" });
+
+    if (geologyAgrees === true) {
+      // Agreement nudges, it does not dominate: one polygon is not a catchment.
+      coarseness += 0.15 * Math.sign(geology.coarseness);
+      reasoning.push(
+        `${geology.statement} That agrees with the catchment properties, which is the more ` +
+          "reassuring outcome: two independent datasets pointing the same way.",
+      );
+    } else if (geologyAgrees === false) {
+      reasoning.push(
+        `${geology.statement} That does NOT agree with the catchment properties. The mapped ` +
+          "geology describes one polygon at the abstraction point, while the catchment figures " +
+          "describe everything upstream — so a disagreement usually means the site sits on " +
+          "something locally unrepresentative. The catchment-wide reading is used, and the " +
+          "disagreement is the reason confidence stays low.",
+      );
+      wouldChangeThis.push(
+        "Resolving the disagreement between the mapped geology at the point and the catchment-wide " +
+          "properties. A raw water sample would settle it directly.",
+      );
+    } else {
+      reasoning.push(`${geology.statement}`);
+    }
+  }
+
   /* --- Decide --------------------------------------------------------- */
   let character: ParticleCharacter;
   if (coarseness >= 0.55) character = "sand";
@@ -194,7 +244,9 @@ export function inferCharacter(p: CatchmentProperties): CharacterInference | nul
   const agree =
     bedrockDecisive && bfiDecisive &&
     ((high / bedrockTotal > 0.6 && bfi! >= 0.7) || (low / bedrockTotal > 0.6 && bfi! <= 0.45));
-  const confidence: "low" | "medium" = agree ? "medium" : "low";
+  // Geology disagreeing with the catchment always drops confidence back to low.
+  const confidence: "low" | "medium" =
+    agree && geologyAgrees !== false ? "medium" : "low";
 
   reasoning.push(
     `Taken together, the catchment points to ${describeCharacter(character)}. This is inferred ` +

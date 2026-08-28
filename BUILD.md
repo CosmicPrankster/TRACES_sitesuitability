@@ -8,7 +8,7 @@ it works, not when it has been written.
 | 1 | Data schemas + files | **done** | 24 tests, incl. 8 that feed the validator broken data |
 | 2 | Data-source probe | **done** | v1 + v2 run live on two real sites |
 | 3 | Site + waterbody resolution | **logic done** | 18 tests; live path in probe v3 |
-| 4 | Catchment → particle character | **logic done** | 17 tests against real NRFA records |
+| 4 | Catchment + geology → character | **logic done** | 32 tests against real NRFA + BGS records |
 | 5 | Screening engine | not started | |
 | 6 | UI | not started | |
 | 7 | AI conversation layer | not started | |
@@ -125,6 +125,47 @@ bedrock but a middling BFI, disagreeing).
 **Why NRFA rather than the EA:** NRFA covers the whole UK. The Environment
 Agency has no data for Scotland at all, so an EA-based inference could never
 have screened Kinness Burn.
+
+## Block 4b: BGS geology, and why JSON was empty
+
+The BGS WMS returns `INFO_FORMAT=application/json` as an **empty
+FeatureCollection** — 200 OK, 441 bytes, no features, at every location.
+`text/xml` returns the data. That is not a fallback; it is the only format that
+works on this service.
+
+Tilford, verbatim from the probe:
+
+```
+bedrock       LEX_D    Folkestone Formation
+              RCS_D    Sandstone
+              GP_EQ_D  Lower Greensand Group
+              LEX_WEB  .../lexicon.cfm?pub=FO
+
+superficial   LEX_D    Alluvium
+              RCS_D    Clay, silt, sand and gravel
+              LEX_WEB  .../lexicon.cfm?pub=ALV
+```
+
+`RCS_D` is the field that matters — it is the rock composition, and it maps
+directly onto what the rock weathers to. `LEX_WEB` gives a citable BGS Lexicon
+page per unit, so every geological claim in a report carries a link a geologist
+can check.
+
+Three judgements are built into the reading:
+
+- **A composite lithology is not its first word.** "Clay, silt, sand and gravel"
+  is mixed, and must not be read as clay.
+- **Alluvium is partly circular evidence.** At a river site the superficial
+  deposit is usually the river's own alluvium, which describes what it has been
+  carrying rather than what the catchment supplies. So bedrock is weighted
+  higher when the superficial is alluvium, and lower when it is not.
+- **Peat is a density problem, not a fineness problem.** Separation depends on
+  the density difference, and peat has almost none.
+
+**BGS corroborates; NRFA drives.** A river integrates its whole catchment, so
+catchment-wide properties beat the one polygon the abstraction point sits on.
+Where the two disagree the disagreement is reported rather than averaged away,
+the catchment-wide reading is kept, and confidence drops to low.
 
 ## The model, now that it is narrowed
 

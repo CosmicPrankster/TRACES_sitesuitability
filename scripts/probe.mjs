@@ -153,17 +153,17 @@ if (bestFormat) {
     ["BGS.50k.Mass.movement", "mass movement"],
   ]) {
     const body = await get(`${label}`, wmsUrl(layer, bestFormat), bestFormat);
-    if (typeof body === "string" && body.length > 400) {
+    if (typeof body === "string" && body.includes("<FIELDS")) {
       geology[label] = body;
-      // Pull out anything that looks like a field="value" pair.
-      const pairs = [...body.matchAll(/([A-Za-z_][A-Za-z0-9_]{2,})\s*=\s*["']([^"']{1,120})["']/g)]
-        .map(([, k, v]) => `${k}=${v}`)
-        .filter((p) => !/^xmlns|^xsi|^version|^encoding/i.test(p));
-      const tags = [...body.matchAll(/<([A-Za-z_][\w.]{2,})>([^<]{1,120})<\/\1>/g)]
-        .map(([, k, v]) => `${k}=${v.trim()}`);
-      const found = [...new Set([...pairs, ...tags])].slice(0, 25);
-      if (found.length) found.forEach((f) => console.log(`       ${c.green}${f}${c.reset}`));
-      else console.log(`       ${c.yellow}(body present but no field=value pairs found)${c.reset}`);
+      // The fields that actually matter, matching lib/geology.ts.
+      const attr = (k) => (body.match(new RegExp(`\\b${k}="([^"]*)"`)) || [])[1];
+      const show = [
+        ["unit", attr("LEX_D")], ["lithology", attr("RCS_D")], ["code", attr("RCS")],
+        ["group", attr("GP_EQ_D")], ["type", attr("TYPE_D")], ["lexicon", attr("LEX_WEB")],
+      ].filter(([, v]) => v && !["Not Applicable", "No Parent", "Not Entered", " "].includes(v));
+      show.forEach(([k, v]) => console.log(`       ${c.green}${String(k).padEnd(10)} ${v}${c.reset}`));
+    } else if (typeof body === "string") {
+      console.log(`       ${c.dim}no feature here (normal for artificial ground / landslip)${c.reset}`);
     }
   }
 }
