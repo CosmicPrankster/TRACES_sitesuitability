@@ -8,7 +8,7 @@ it works, not when it has been written.
 | 1 | Data schemas + files | **done** | 24 tests, incl. 8 that feed the validator broken data |
 | 2 | Data-source probe | **done** | v1 + v2 run live on two real sites |
 | 3 | Site + waterbody resolution | **logic done** | 18 tests; live path in probe v3 |
-| 4 | Geology + catchment providers | next | |
+| 4 | Catchment → particle character | **logic done** | 17 tests against real NRFA records |
 | 5 | Screening engine | not started | |
 | 6 | UI | not started | |
 | 7 | AI conversation layer | not started | |
@@ -21,8 +21,8 @@ it works, not when it has been written.
 
 | Source | What it gives | Notes |
 |---|---|---|
-| **BGS geology via WMS GetFeatureInfo** | Bedrock, superficial deposits, artificial ground, mass movement at a point | **The foundation.** REST `identify` returns empty every time; WMS works. |
-| **NRFA** (National River Flow Archive) | Nearest gauged catchment, area, river, catchment properties | **UK-wide** — the only catchment source covering Scotland |
+| **NRFA** catchment properties | Bedrock permeability, base flow index, land cover — enough to infer particle character | **The foundation.** UK-wide, 201 fields, fast. |
+| **BGS geology via WMS** | Bedrock and superficial deposits at a point | Corroborates NRFA. `INFO_FORMAT=application/json` returns an empty FeatureCollection; `text/xml` carries the data. |
 | Nominatim geocoding | Coordinates and candidate places | The only geocoder that resolves river names |
 | EA real-time level + rainfall | Stage trend, antecedent rainfall | England only. Slow (3–8 s). Context, not foundation. |
 
@@ -85,6 +85,46 @@ water, afon, loch, …), then:
 5. **Fall back cleanly.** An ungauged burn like the Kinness matches nothing in
    NRFA, which is normal; the geology is then read from the map at the
    geocoded place instead. No forced match.
+
+## Block 4: catchment properties → particle character
+
+NRFA carries 201 fields per station, and the sediment-relevant ones separate the
+two test sites cleanly. This is the inference that decides whether hydrocyclone
+pre-treatment can help, so it is the most important one in the application — and
+it is an *inference*, labelled as one wherever it appears.
+
+Real values, from the probe:
+
+| | Wey at Tilford (39011) | Motray Water at St Michaels (14005) |
+|---|---|---|
+| High-perm bedrock | **0.778** | `null` |
+| Low-perm bedrock | 0.0001 | **0.738** |
+| BFIHOST19 | **0.773** | 0.573 |
+| Arable (LCM2023) | 0.261 | **0.568** |
+| Result | **sand**, medium confidence | **clay**, low confidence |
+
+The reasoning, in order of weight:
+
+1. **Bedrock permeability** — the strongest signal. Permeable means sandstone,
+   chalk or greensand, weathering to sand-grade quartz, with water infiltrating
+   rather than running off. Impermeable means mudstone, clay or crystalline
+   rock, weathering to silt and clay and shedding water at the surface.
+2. **Base flow index** — corroborates it and says how flashy the river is. High
+   BFI means groundwater-fed and stable: less suspended sediment, less of it
+   storm-mobilised fines.
+3. **Arable land** — the strongest anthropogenic term. Cultivated ground is bare
+   for part of the year and sheds fine silt and clay, shifting the load finer
+   than geology alone would suggest.
+4. **Urban land** — finer again, and flashier.
+
+Confidence reaches "medium" only when bedrock and base flow point the same way,
+and never reaches "high": this is not a measurement. The Wey scores medium
+(permeable *and* groundwater-fed, agreeing); the Motray scores low (impermeable
+bedrock but a middling BFI, disagreeing).
+
+**Why NRFA rather than the EA:** NRFA covers the whole UK. The Environment
+Agency has no data for Scotland at all, so an EA-based inference could never
+have screened Kinness Burn.
 
 ## The model, now that it is narrowed
 

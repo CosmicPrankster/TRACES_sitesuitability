@@ -106,42 +106,67 @@ if (allMatches.length > 1) {
 console.log();
 
 /* ---- 2. BGS geology via WMS - THE FOUNDATION ----------------------- */
-console.log(`${c.cyan}2. BGS geology via WMS GetFeatureInfo  ${c.dim}(this is what works)${c.reset}`);
+// JSON returned a constant 441 bytes at both test sites: an empty
+// FeatureCollection. text/xml returned 1595 b at Tilford and 1821 b at St
+// Andrews - different content per location - so the query IS hitting real data
+// and only the JSON writer is empty. This run finds which format carries it and
+// prints the body verbatim.
+console.log(`${c.cyan}2. BGS geology via WMS  ${c.dim}(JSON came back empty - trying other formats)${c.reset}`);
 
-const LAYERS = [
-  ["BGS.50k.Bedrock", "bedrock"],
-  ["BGS.50k.Superficial.deposits", "superficial"],
-  ["BGS.50k.Artificial.ground", "artificial"],
-  ["BGS.50k.Mass.movement", "mass movement"],
+const WMS = "https://map.bgs.ac.uk/arcgis/services/BGS_Detailed_Geology/MapServer/WMSServer";
+const half = 500;
+const bbox = `${bng.easting - half},${bng.northing - half},${bng.easting + half},${bng.northing + half}`;
+const wmsUrl = (layer, fmt) =>
+  `${WMS}?SERVICE=WMS&VERSION=1.3.0&REQUEST=GetFeatureInfo&LAYERS=${layer}&QUERY_LAYERS=${layer}` +
+  `&CRS=EPSG:27700&BBOX=${bbox}&WIDTH=101&HEIGHT=101&I=50&J=50&FORMAT=image/png` +
+  `&INFO_FORMAT=${encodeURIComponent(fmt)}&FEATURE_COUNT=10`;
+
+const FORMATS = [
+  "text/xml",
+  "text/html",
+  "application/vnd.ogc.gml",
+  "application/vnd.esri.wms_featureinfo_xml",
+  "text/plain",
 ];
-const geology = {};
 
-for (const [layer, label] of LAYERS) {
-  const half = 500;
-  const bbox = `${bng.easting - half},${bng.northing - half},${bng.easting + half},${bng.northing + half}`;
-  const body = await get(`${label} (${layer})`,
-    `https://map.bgs.ac.uk/arcgis/services/BGS_Detailed_Geology/MapServer/WMSServer?SERVICE=WMS&VERSION=1.3.0` +
-    `&REQUEST=GetFeatureInfo&LAYERS=${layer}&QUERY_LAYERS=${layer}&CRS=EPSG:27700&BBOX=${bbox}` +
-    `&WIDTH=101&HEIGHT=101&I=50&J=50&INFO_FORMAT=application/json&FORMAT=image/png`);
-
-  const f = body?.features?.[0];
-  if (f) {
-    geology[label] = f.properties || {};
-    console.log(`     ${c.green}${c.bold}FIELDS: ${Object.keys(f.properties || {}).join(", ")}${c.reset}`);
-    for (const [k, v] of Object.entries(f.properties || {})) {
-      if (v !== null && v !== "" && String(v) !== "Null") console.log(`       ${c.green}${k} = ${v}${c.reset}`);
-    }
-  } else if (body) {
-    console.log(`     ${c.yellow}no feature at this point (may genuinely be absent - e.g. no artificial ground)${c.reset}`);
+console.log(`  ${c.dim}Finding a format that carries the data (bedrock layer):${c.reset}`);
+let bestFormat = null;
+for (const fmt of FORMATS) {
+  const body = await get(`bedrock as ${fmt}`, wmsUrl("BGS.50k.Bedrock", fmt), fmt);
+  if (typeof body === "string" && body.length > 500) {
+    if (!bestFormat) bestFormat = fmt;
+    console.log(`\n${c.green}${c.bold}----- RAW BODY (${fmt}, ${body.length} b) -----${c.reset}`);
+    console.log(body.slice(0, 2500));
+    console.log(`${c.green}${c.bold}----- END -----${c.reset}\n`);
+    break; // one full body is enough to write a parser against
   }
 }
 
-// A second info format, in case JSON ever drops fields the others keep.
-await get("bedrock as text/xml (fallback format check)",
-  `https://map.bgs.ac.uk/arcgis/services/BGS_Detailed_Geology/MapServer/WMSServer?SERVICE=WMS&VERSION=1.3.0` +
-  `&REQUEST=GetFeatureInfo&LAYERS=BGS.50k.Bedrock&QUERY_LAYERS=BGS.50k.Bedrock&CRS=EPSG:27700` +
-  `&BBOX=${bng.easting - 500},${bng.northing - 500},${bng.easting + 500},${bng.northing + 500}` +
-  `&WIDTH=101&HEIGHT=101&I=50&J=50&INFO_FORMAT=text/xml&FORMAT=image/png`, "text/xml");
+// Now every layer in whichever format carried the data.
+const geology = {};
+if (bestFormat) {
+  console.log(`  ${c.dim}All layers as ${bestFormat}:${c.reset}`);
+  for (const [layer, label] of [
+    ["BGS.50k.Bedrock", "bedrock"],
+    ["BGS.50k.Superficial.deposits", "superficial"],
+    ["BGS.50k.Artificial.ground", "artificial"],
+    ["BGS.50k.Mass.movement", "mass movement"],
+  ]) {
+    const body = await get(`${label}`, wmsUrl(layer, bestFormat), bestFormat);
+    if (typeof body === "string" && body.length > 400) {
+      geology[label] = body;
+      // Pull out anything that looks like a field="value" pair.
+      const pairs = [...body.matchAll(/([A-Za-z_][A-Za-z0-9_]{2,})\s*=\s*["']([^"']{1,120})["']/g)]
+        .map(([, k, v]) => `${k}=${v}`)
+        .filter((p) => !/^xmlns|^xsi|^version|^encoding/i.test(p));
+      const tags = [...body.matchAll(/<([A-Za-z_][\w.]{2,})>([^<]{1,120})<\/\1>/g)]
+        .map(([, k, v]) => `${k}=${v.trim()}`);
+      const found = [...new Set([...pairs, ...tags])].slice(0, 25);
+      if (found.length) found.forEach((f) => console.log(`       ${c.green}${f}${c.reset}`));
+      else console.log(`       ${c.yellow}(body present but no field=value pairs found)${c.reset}`);
+    }
+  }
+}
 console.log();
 
 /* ---- 3. What else is in GeoIndex_Onshore? -------------------------- */
@@ -188,12 +213,23 @@ if (nearest) {
   if (rec) {
     console.log(`  ${c.green}${c.bold}ALL NRFA FIELDS (${Object.keys(rec).length}):${c.reset}`);
     console.log(`     ${c.dim}${Object.keys(rec).join(", ")}${c.reset}`);
-    const interesting = Object.entries(rec).filter(([k]) =>
-      /geolog|aquifer|bfi|perm|soil|urban|land|lcm|saar|propwet|area|elev|slope|sediment/i.test(k));
-    if (interesting.length) {
-      console.log(`  ${c.green}${c.bold}Fields bearing on sediment character:${c.reset}`);
-      interesting.forEach(([k, v]) =>
-        console.log(`       ${c.green}${k} = ${typeof v === "object" ? JSON.stringify(v).slice(0, 160) : v}${c.reset}`));
+    // Only the fields that bear on sediment character. The 100+ yearly land
+    // cover columns are noise; the most recent year is enough.
+    const WANTED = [
+      "catchment-area", "saar-1991-2020", "bfihost19", "bfihost", "propwet",
+      "high-perm-bedrock", "moderate-perm-bedrock", "low-perm-bedrock", "mixed-perm-bedrock",
+      "high-perm-superficial", "low-perm-superficial", "mixed-perm-superficial",
+      "sprhost", "dpsbar", "draindens", "urbext-2015",
+      "lcm2023-cropland", "lcm2023-grassland", "lcm2023-built-up-areas",
+      "lcm2023-deciduous-woodland", "lcm2023-evergreen-woodland", "lcm2023-bare-soil-rock",
+    ];
+    console.log(`  ${c.green}${c.bold}Fields bearing on sediment character:${c.reset}`);
+    for (const k of WANTED) {
+      if (k in rec) console.log(`       ${c.green}${k.padEnd(26)} ${rec[k]}${c.reset}`);
+    }
+    if (rec["description-catchment"]) {
+      console.log(`  ${c.green}${c.bold}NRFA catchment description:${c.reset}`);
+      console.log(`       ${c.dim}${String(rec["description-catchment"]).slice(0, 600)}${c.reset}`);
     }
   }
 }

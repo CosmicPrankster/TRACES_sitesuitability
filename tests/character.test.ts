@@ -1,0 +1,171 @@
+import { describe, expect, it } from "vitest";
+import {
+  describeCharacter,
+  fromNrfaRecord,
+  hasEnoughToInfer,
+  inferCharacter,
+  type CatchmentProperties,
+} from "@/lib/character";
+
+/**
+ * Fixtures are the REAL NRFA records returned by the probe for the two test
+ * sites. Nothing here is invented.
+ */
+
+/** NRFA 39011, Wey at Tilford. Greensand catchment, groundwater-fed. */
+const WEY_AT_TILFORD = {
+  id: 39011,
+  name: "Wey at Tilford",
+  "catchment-area": 396.3,
+  "high-perm-bedrock": 0.7778,
+  "moderate-perm-bedrock": 0.0926,
+  "low-perm-bedrock": 0.0001,
+  "mixed-perm-bedrock": 0.1295,
+  "high-perm-superficial": 0.0391,
+  "low-perm-superficial": 0.1831,
+  "mixed-perm-superficial": 0.0002,
+  bfihost: 0.795,
+  bfihost19: 0.773,
+  "lcm2023-cropland": 0.2614,
+  "lcm2023-built-up-areas": 0.123,
+  "saar-1991-2020": 929,
+};
+
+/** NRFA 14005, Motray Water at St Michaels. Impermeable, heavily arable. */
+const MOTRAY_AT_ST_MICHAELS = {
+  id: 14005,
+  name: "Motray Water at St Michaels",
+  "catchment-area": 60,
+  "high-perm-bedrock": null,
+  "moderate-perm-bedrock": 0.2624,
+  "low-perm-bedrock": 0.7376,
+  "mixed-perm-bedrock": null,
+  "high-perm-superficial": 0.2623,
+  "low-perm-superficial": null,
+  "mixed-perm-superficial": 0.4054,
+  bfihost: 0.634,
+  bfihost19: 0.573,
+  "lcm2023-cropland": 0.5679,
+  "lcm2023-built-up-areas": 0.0181,
+  "saar-1991-2020": 754,
+};
+
+describe("mapping a real NRFA record", () => {
+  it("reads the Tilford record without loss", () => {
+    const p = fromNrfaRecord(WEY_AT_TILFORD);
+    expect(p.stationId).toBe(39011);
+    expect(p.highPermBedrock).toBeCloseTo(0.7778, 4);
+    expect(p.bfihost).toBeCloseTo(0.773, 3); // prefers bfihost19
+    expect(p.cropland).toBeCloseTo(0.2614, 4);
+    expect(p.catchmentAreaKm2).toBe(396.3);
+  });
+
+  it("treats NRFA's nulls as absent, not as zero-confidence", () => {
+    const p = fromNrfaRecord(MOTRAY_AT_ST_MICHAELS);
+    expect(p.highPermBedrock).toBeNull();
+    expect(p.lowPermBedrock).toBeCloseTo(0.7376, 4);
+  });
+});
+
+describe("the two real sites come out differently", () => {
+  const wey = inferCharacter(fromNrfaRecord(WEY_AT_TILFORD))!;
+  const motray = inferCharacter(fromNrfaRecord(MOTRAY_AT_ST_MICHAELS))!;
+
+  it("infers a coarser load for the Greensand, groundwater-fed Wey", () => {
+    expect(["sand", "mixed_mineral"]).toContain(wey.character);
+  });
+
+  it("infers a finer load for the impermeable, heavily arable Motray", () => {
+    expect(["silt", "clay"]).toContain(motray.character);
+  });
+
+  it("does not give the same answer for both, which was the old failure", () => {
+    expect(wey.character).not.toBe(motray.character);
+  });
+
+  it("cites the permeable bedrock for the Wey", () => {
+    const prose = wey.reasoning.join(" ");
+    expect(prose).toMatch(/high-permeability bedrock/i);
+    expect(prose).toMatch(/sandstone, chalk or greensand/i);
+    expect(prose).toMatch(/base flow index of 0\.77/);
+  });
+
+  it("cites both the impermeable bedrock and the arable land for the Motray", () => {
+    const prose = motray.reasoning.join(" ");
+    expect(prose).toMatch(/low-permeability bedrock/i);
+    expect(prose).toMatch(/57 % of the catchment is arable/i);
+  });
+
+  it("never claims to have measured anything", () => {
+    for (const r of [wey, motray]) {
+      expect(r.confidence).not.toBe("high");
+      expect(r.reasoning.join(" ")).toMatch(/inferred from catchment properties, not measured/i);
+    }
+  });
+
+  it("names what would overturn the inference", () => {
+    for (const r of [wey, motray]) {
+      expect(r.wouldChangeThis.join(" ")).toMatch(/particle-size distribution/i);
+      expect(r.wouldChangeThis.join(" ")).toMatch(/settle-bottle/i);
+    }
+  });
+
+  it("keeps an evidence trail of the numbers it used", () => {
+    expect(wey.evidence.map((e) => e.field)).toContain("high-perm-bedrock");
+    expect(wey.evidence.map((e) => e.field)).toContain("bfihost");
+    expect(motray.evidence.map((e) => e.field)).toContain("low-perm-bedrock");
+    expect(motray.evidence.map((e) => e.field)).toContain("cropland");
+  });
+});
+
+describe("the drivers behave as the physics says they should", () => {
+  const base: CatchmentProperties = { highPermBedrock: 1, bfihost: 0.8 };
+
+  it("permeable bedrock gives a coarser answer than impermeable", () => {
+    const permeable = inferCharacter({ highPermBedrock: 1, bfihost: 0.6 })!;
+    const impermeable = inferCharacter({ lowPermBedrock: 1, bfihost: 0.6 })!;
+    const order = ["clay", "silt", "mixed_mineral", "sand"];
+    expect(order.indexOf(permeable.character)).toBeGreaterThan(order.indexOf(impermeable.character));
+  });
+
+  it("heavy arable shifts a permeable catchment finer", () => {
+    const clean = inferCharacter({ ...base })!;
+    const arable = inferCharacter({ ...base, cropland: 0.7 })!;
+    const order = ["clay", "silt", "mixed_mineral", "sand"];
+    expect(order.indexOf(arable.character)).toBeLessThanOrEqual(order.indexOf(clean.character));
+  });
+
+  it("a low base flow index shifts the answer finer", () => {
+    const stable = inferCharacter({ moderatePermBedrock: 1, bfihost: 0.85 })!;
+    const flashy = inferCharacter({ moderatePermBedrock: 1, bfihost: 0.3 })!;
+    const order = ["clay", "silt", "mixed_mineral", "sand"];
+    expect(order.indexOf(flashy.character)).toBeLessThan(order.indexOf(stable.character));
+  });
+
+  it("raises confidence only when bedrock and base flow agree", () => {
+    const agreeing = inferCharacter({ highPermBedrock: 1, bfihost: 0.8 })!;
+    const conflicting = inferCharacter({ highPermBedrock: 1, bfihost: 0.3 })!;
+    expect(agreeing.confidence).toBe("medium");
+    expect(conflicting.confidence).toBe("low");
+  });
+});
+
+describe("refusing to guess", () => {
+  it("returns null when there is nothing to reason from", () => {
+    expect(inferCharacter({})).toBeNull();
+    expect(inferCharacter({ catchmentAreaKm2: 100, saarMm: 800 })).toBeNull();
+    expect(hasEnoughToInfer({})).toBe(false);
+  });
+
+  it("will infer from base flow index alone, saying so", () => {
+    const r = inferCharacter({ bfihost: 0.85 });
+    expect(r).not.toBeNull();
+    expect(r!.confidence).toBe("low");
+  });
+
+  it("describes every character in plain language", () => {
+    for (const ch of ["sand", "mixed_mineral", "silt", "clay"] as const) {
+      expect(describeCharacter(ch).length).toBeGreaterThan(15);
+    }
+  });
+});
