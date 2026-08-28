@@ -212,7 +212,7 @@ out of it — all of them silent, all of them now fixed and pinned by tests.
 |---|---|---|---|
 | Test at Romsey | Wittering Fm, "Sand, silt and clay" | BFI 0.63 | Resolved to the wrong river — see below |
 | Tees at Middleton | Alston Fm, "Limestone, sandstone, siltstone and mudstone" | BFI 0.31, arable 0.0001, SAAR 1585 | Clean name match, 0.4 km |
-| Great Ouse at Bedford | *(none — see below)* | BFI 0.47, arable 0.445 | Geocoded to Pennsylvania |
+| Great Ouse at Bedford | Great Oolite Gp, "Interbedded limestone and argillaceous rocks" | BFI 0.44, arable 0.444 | Geocoded to Pennsylvania — **fixed, now 0.4 km from *Bedford Ouse at Bedford*** |
 | Spey at Boat of Garten | Grampian Group, "Micaceous psammite" | BFI 0.41, low-perm bedrock 1.0 | Exposed the permeability trap |
 
 ### Defect 1 — geocoding left the country
@@ -252,6 +252,34 @@ coarse, the geology now overrides the permeability class, and the report says
 why. `psammite` (metamorphosed sandstone, coarse) and `pelite` (metamorphosed
 mudstone, fine) are also now distinguished, which a single "metamorphic" rule
 could not do.
+
+### Defect 4 — an interbedded sequence read as only its coarse half
+
+Found on the Bedford re-run. BGS describes the Great Oolite Group there as
+*"Interbedded limestone and [subequal/subordinate] argillaceous rocks"*. The
+lithology rules matched "limestone" first and scored it neutral carbonate,
+silently discarding the argillaceous half — while NRFA's own note for the same
+station reads *"Predominantly clay"*.
+
+Interbedded carbonate-and-clay sequences are now matched before the plain
+carbonate rule, and `argillaceous` is recognised in its own right.
+
+### Verification after the fixes
+
+All four sites now resolve correctly:
+
+| Site | NRFA match | Distance |
+|---|---|---|
+| Tees at Middleton | 25018 Tees at Middleton in Teesdale | 0.4 km |
+| Great Ouse at Bedford | 33002 Bedford Ouse at Bedford | 0.4 km |
+| Spey at Boat of Garten | 8005 Spey at Boat of Garten | 0.5 km |
+| Wey at Tilford | 39011 Wey at Tilford | 0.7 km |
+
+Bedford's catchment reading comes out **clay**, which agrees with NRFA's own
+catchment description. Its point geology (river terrace sand and gravel)
+disagrees with that, and the report says so rather than splitting the
+difference: the abstraction point sits on a coarse terrace while the catchment
+drains clay, and the catchment-wide reading is the one that governs.
 
 ## Decisions taken, and why
 

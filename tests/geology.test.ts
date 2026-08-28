@@ -140,3 +140,36 @@ describe("Highland lithologies (Spey, real data)", () => {
     expect(s.coarseness).toBeGreaterThan(0.5);
   });
 });
+
+describe("interbedded sequences (Great Oolite at Bedford, real data)", () => {
+  /**
+   * BGS describes the Great Oolite Group at Bedford as "Interbedded limestone
+   * and [subequal/subordinate] argillaceous rocks". Reading only the limestone
+   * half discards the clay, and NRFA's own catchment note for this station says
+   * "Predominantly clay".
+   */
+  const REAL = "Interbedded limestone and [subequal/subordinate] argillaceous rocks";
+
+  it("does not read an interbedded carbonate-clay sequence as pure carbonate", () => {
+    const r = readLithology(REAL)!;
+    expect(r.coarseness).toBeLessThan(0);
+    expect(r.coarseness).toBeLessThan(readLithology("Limestone")!.coarseness);
+  });
+
+  it("says explicitly that the clay beds make it finer", () => {
+    expect(readLithology(REAL)!.meaning).toMatch(/argillaceous beds weather to fines/i);
+  });
+
+  it("reads argillaceous rock on its own as fine", () => {
+    expect(readLithology("Argillaceous rocks")!.coarseness).toBeLessThan(-0.4);
+  });
+
+  it("still reads a clean limestone as carbonate", () => {
+    expect(readLithology("Limestone")!.coarseness).toBe(0);
+  });
+
+  it("reads the real Bedford superficial deposit as coarse", () => {
+    // Felmersham Member, a river terrace deposit - not alluvium.
+    expect(readLithology("Sand and gravel")!.coarseness).toBeGreaterThan(0.5);
+  });
+});

@@ -110,6 +110,14 @@ const LITHOLOGY_RULES: { pattern: RegExp; coarseness: number; meaning: string }[
     meaning: "arenaceous rock, weathering to sand-grade quartz grains that are dense, discrete and readily separated" },
   { pattern: /\bsand\b/i, coarseness: 0.7,
     meaning: "sand, giving dense discrete grains well suited to centrifugal separation" },
+  // Tested BEFORE the plain carbonate rule: BGS describes the Great Oolite as
+  // "Interbedded limestone and [subequal/subordinate] argillaceous rocks", and
+  // reading only the limestone half silently discards the clay.
+  { pattern: /interbedded.*(argillaceous|mudstone|clay|shale)|(?:argillaceous|mudstone|clay|shale).*interbedded/i,
+    coarseness: -0.35,
+    meaning: "an interbedded carbonate and clay-rich sequence — the argillaceous beds weather to fines, so it is materially finer than the limestone alone would suggest" },
+  { pattern: /\bargillaceous\b/i, coarseness: -0.6,
+    meaning: "argillaceous (clay-rich) rock, weathering to cohesive fine material" },
   { pattern: /\b(chalk|limestone|dolomite|dolostone)\b/i, coarseness: 0.0,
     meaning: "carbonate rock, which weathers to a fine carbonate load, often with a coarser insoluble residue" },
   { pattern: /\b(granite|basalt|dolerite|gabbro|andesite|rhyolite|tuff|igneous|volcanic)\b/i, coarseness: 0.2,
