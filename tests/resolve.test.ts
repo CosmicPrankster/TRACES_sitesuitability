@@ -1,0 +1,159 @@
+import { describe, expect, it } from "vitest";
+import {
+  decideResolution,
+  parseQuery,
+  rankStations,
+  scoreStation,
+  tokens,
+  type NrfaStation,
+} from "@/lib/resolve";
+
+/**
+ * Fixtures taken from the real NRFA station list returned by the probe, plus
+ * decoys chosen to be genuinely confusable.
+ */
+const STATIONS: NrfaStation[] = [
+  { id: 39011, name: "Wey at Tilford", river: "Wey", easting: 487300, northing: 143400, "catchment-area": 396.3 },
+  { id: 39007, name: "Wey at Weybridge", river: "Wey", easting: 507000, northing: 165000, "catchment-area": 1010 },
+  { id: 14005, name: "Motray Water at St Michaels", river: "Motray Water", easting: 344000, northing: 720000, "catchment-area": 60 },
+  { id: 39001, name: "Thames at Kingston", river: "Thames", easting: 517700, northing: 169800, "catchment-area": 9948 },
+  { id: 28009, name: "Trent at Colwick", river: "Trent", easting: 462100, northing: 339500, "catchment-area": 7486 },
+  { id: 21009, name: "Tweed at Norham", river: "Tweed", easting: 389800, northing: 647200, "catchment-area": 4390 },
+];
+
+describe("splitting the query", () => {
+  it("reads settlement-then-waterbody", () => {
+    const p = parseQuery("Tilford, River Wey");
+    expect(p.waterbody).toBe("River Wey");
+    expect(p.settlement).toBe("Tilford");
+    expect(p.ambiguous).toBe(false);
+  });
+
+  it("reads waterbody-then-settlement, the other way round", () => {
+    const p = parseQuery("Kinness Burn, St Andrews");
+    expect(p.waterbody).toBe("Kinness Burn");
+    expect(p.settlement).toBe("St Andrews");
+    expect(p.ambiguous).toBe(false);
+  });
+
+  it("recognises the many words British watercourses go by", () => {
+    for (const q of [
+      "Foo, River Bar", "Foo, Bar Burn", "Foo, Bar Beck", "Foo, Bar Water",
+      "Foo, Afon Bar", "Foo, Bar Brook", "Foo, Loch Bar",
+    ]) {
+      expect(parseQuery(q).waterbody, q).toBeDefined();
+    }
+  });
+
+  it("keeps the settlement nearest the waterbody when a county follows", () => {
+    const p = parseQuery("Kinness Burn, St Andrews, Fife");
+    expect(p.waterbody).toBe("Kinness Burn");
+    expect(p.settlement).toBe("St Andrews");
+  });
+
+  it("handles a lone place or a lone river", () => {
+    expect(parseQuery("Tilford").settlement).toBe("Tilford");
+    expect(parseQuery("River Wey").waterbody).toBe("River Wey");
+  });
+
+  it("drops noise words but keeps real ones", () => {
+    expect(tokens("The River at Tilford")).toEqual(["river", "tilford"]);
+  });
+});
+
+describe("matching against NRFA stations", () => {
+  it("resolves 'Tilford, River Wey' to the Tilford gauge, not the Weybridge one", () => {
+    const parsed = parseQuery("Tilford, River Wey");
+    const ranked = rankStations(parsed, STATIONS);
+    expect(ranked[0].station.id).toBe(39011);
+    expect(ranked[0].score).toBe(1);
+    expect(ranked[0].matchedRiver).toBe(true);
+    expect(ranked[0].matchedPlace).toBe(true);
+  });
+
+  it("still lists the same river elsewhere, but below the exact match", () => {
+    const ranked = rankStations(parseQuery("Tilford, River Wey"), STATIONS);
+    const weybridge = ranked.find((m) => m.station.id === 39007);
+    expect(weybridge).toBeDefined();
+    expect(weybridge!.score).toBeLessThan(1);
+    expect(weybridge!.reason).toMatch(/right river.*different place/i);
+  });
+
+  it("will not match a river alone, which would put us anywhere along it", () => {
+    const ranked = rankStations(parseQuery("River Wey"), STATIONS);
+    expect(ranked.every((m) => m.score < 1)).toBe(true);
+  });
+
+  it("returns nothing for an ungauged burn rather than forcing a match", () => {
+    const ranked = rankStations(parseQuery("Kinness Burn, St Andrews"), STATIONS);
+    expect(ranked.every((m) => m.score < 1)).toBe(true);
+  });
+
+  it("tolerates a misspelling of the water word itself", () => {
+    const parsed = parseQuery("Tilford, Wey");
+    const ranked = rankStations(parsed, STATIONS);
+    expect(ranked[0].station.id).toBe(39011);
+  });
+
+  it("is case and punctuation insensitive", () => {
+    const a = rankStations(parseQuery("TILFORD, RIVER WEY"), STATIONS);
+    const b = rankStations(parseQuery("tilford , river  wey"), STATIONS);
+    expect(a[0].station.id).toBe(39011);
+    expect(b[0].station.id).toBe(39011);
+  });
+
+  it("does not match unrelated rivers at all", () => {
+    const ranked = rankStations(parseQuery("Tilford, River Wey"), STATIONS);
+    expect(ranked.map((m) => m.station.id)).not.toContain(28009);
+    expect(ranked.map((m) => m.station.id)).not.toContain(21009);
+  });
+
+  it("scores a place-only match below a river-and-place match", () => {
+    const parsed = parseQuery("Kingston, River Wey");
+    const m = scoreStation(parsed, STATIONS[3]); // Thames at Kingston
+    expect(m.matchedPlace).toBe(true);
+    expect(m.matchedRiver).toBe(false);
+    expect(m.score).toBeLessThan(1);
+    expect(m.reason).toMatch(/different watercourse/i);
+  });
+});
+
+describe("deciding whether to ask", () => {
+  it("proposes a single exact match for confirmation, never assumes it", () => {
+    const parsed = parseQuery("Tilford, River Wey");
+    const r = decideResolution(parsed, rankStations(parsed, STATIONS));
+    expect(r.confidence).toBe("likely");
+    expect(r.needsConfirmation).toBe(true);
+    expect(r.statement).toContain("Wey at Tilford");
+    expect(r.statement).toContain("396.3 km²");
+  });
+
+  it("asks which, when several reaches match equally", () => {
+    const twins: NrfaStation[] = [
+      { id: 1, name: "Avon at Bath", river: "Avon", easting: 1, northing: 1 },
+      { id: 2, name: "Avon at Bath", river: "Avon", easting: 2, northing: 2 },
+    ];
+    const parsed = parseQuery("Bath, River Avon");
+    const r = decideResolution(parsed, rankStations(parsed, twins));
+    expect(r.confidence).toBe("ambiguous");
+    expect(r.candidates).toHaveLength(2);
+  });
+
+  it("falls back cleanly for an ungauged watercourse, without asking", () => {
+    const parsed = parseQuery("Kinness Burn, St Andrews");
+    const r = decideResolution(parsed, []);
+    expect(r.confidence).toBe("none");
+    expect(r.needsConfirmation).toBe(false);
+    expect(r.statement).toMatch(/normal for a small or urban watercourse/i);
+    expect(r.statement).toMatch(/geology will be read|geology read from the map/i);
+  });
+
+  it("offers near misses rather than silently picking one", () => {
+    const parsed = parseQuery("Tilford, River Wey");
+    const nearMisses = rankStations(parsed, STATIONS.filter((s) => s.id !== 39011));
+    const r = decideResolution(parsed, nearMisses);
+    expect(r.confidence).toBe("ambiguous");
+    expect(r.needsConfirmation).toBe(true);
+    expect(r.candidates.length).toBeGreaterThan(0);
+  });
+});

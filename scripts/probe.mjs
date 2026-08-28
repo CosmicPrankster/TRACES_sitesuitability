@@ -63,13 +63,30 @@ async function get(name, url, accept = "application/json") {
 
 console.log(`\n${c.bold}Probing (v3, narrowed) for:${c.reset} ${query}\n`);
 
-/* ---- 1. Geocoding: Nominatim only ---------------------------------- */
-console.log(`${c.cyan}1. Geocoding (Nominatim)${c.reset}`);
-const variants = [...new Set([query, ...query.split(",").map((p) => p.trim()).filter(Boolean).reverse()])];
+/* ---- 1. Resolve to ONE stretch of water ---------------------------- */
+// "Tilford, River Wey" means the Wey WHERE IT RUNS THROUGH TILFORD. Geocoding
+// the whole phrase matches nothing; geocoding "River Wey" alone lands anywhere
+// along 70 km of river. So: split the query, geocode the SETTLEMENT, and use
+// that as the anchor. The full scoring logic lives in lib/resolve.ts, which is
+// unit-tested; this is just enough to prove the data path.
+console.log(`${c.cyan}1. Resolving to one stretch of water${c.reset}`);
+
+const WATER_WORDS = ["river", "burn", "beck", "brook", "stream", "water", "creek",
+  "canal", "loch", "lake", "reservoir", "afon", "nant", "mere", "tarn"];
+const parts = query.split(",").map((p) => p.trim()).filter(Boolean);
+const isWater = (p) => WATER_WORDS.some((w) => p.toLowerCase().split(/[\s-]+/).includes(w));
+const waterbodyPart = parts.find(isWater) ?? null;
+const settlementPart = parts.find((p) => !isWater(p)) ?? null;
+
+console.log(`  ${c.dim}waterbody:  ${waterbodyPart ?? "(none detected)"}${c.reset}`);
+console.log(`  ${c.dim}settlement: ${settlementPart ?? "(none detected)"}${c.reset}`);
+
+// Anchor on the settlement: a town is a point, a river is a line.
+const anchorQueries = [settlementPart, query, waterbodyPart].filter(Boolean);
 let lat = null, lon = null, resolvedName = null, matchedVariant = null, allMatches = [];
 
-for (const v of variants) {
-  const body = await get(`search "${v}"`,
+for (const v of anchorQueries) {
+  const body = await get(`geocode "${v}"`,
     `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=5&addressdetails=1&q=${encodeURIComponent(v)}`);
   if (Array.isArray(body) && body.length) {
     allMatches = body.map((r) => ({ name: r.display_name, type: r.type, class: r.class, lat: +r.lat, lon: +r.lon }));
@@ -80,13 +97,12 @@ for (const v of variants) {
 if (lat === null) { console.log(`\n${c.red}Geocoding failed entirely.${c.reset}\n`); process.exit(1); }
 
 const bng = wgs84ToBng(lat, lon);
-console.log(`  ${c.dim}→ ${resolvedName}${c.reset}`);
+console.log(`  ${c.green}→ anchored on "${matchedVariant}": ${resolvedName}${c.reset}`);
 console.log(`  ${c.dim}→ BNG E${bng.easting} N${bng.northing}${c.reset}`);
 if (allMatches.length > 1) {
-  console.log(`  ${c.yellow}→ ${allMatches.length} candidate places. Disambiguation must choose:${c.reset}`);
+  console.log(`  ${c.yellow}→ ${allMatches.length} candidates; the user must confirm which:${c.reset}`);
   allMatches.forEach((m, i) => console.log(`     ${c.dim}${i + 1}. ${m.name} [${m.class}/${m.type}]${c.reset}`));
 }
-if (matchedVariant !== query) console.log(`  ${c.yellow}→ matched on "${matchedVariant}", NOT the full query${c.reset}`);
 console.log();
 
 /* ---- 2. BGS geology via WMS - THE FOUNDATION ----------------------- */
@@ -135,28 +151,43 @@ if (gi?.services) gi.services.forEach((s) => console.log(`     ${c.dim}${s.name}
 console.log();
 
 /* ---- 4. NRFA catchment properties ---------------------------------- */
+// NRFA names stations "<River> at <Place>" - exactly the shape of the query -
+// so a name match is a strong, authoritative resolution for any gauged river.
 console.log(`${c.cyan}4. NRFA catchment properties  ${c.dim}(UK-wide)${c.reset}`);
 const list = await get("all stations",
   "https://nrfaapps.ceh.ac.uk/nrfa/ws/station-info?format=json-object&station=*&fields=id,name,river,easting,northing,catchment-area");
 let nearest = null;
 if (list?.data) {
+  const qTokens = query.toLowerCase().split(/[^a-z0-9]+/).filter((t) => t.length > 2 && !WATER_WORDS.includes(t));
   const withDist = list.data
     .filter((s) => typeof s.easting === "number")
-    .map((s) => ({ ...s, km: Math.hypot(s.easting - bng.easting, s.northing - bng.northing) / 1000 }))
-    .sort((a, b) => a.km - b.km);
-  nearest = withDist[0];
-  console.log(`  ${c.dim}→ five nearest gauged catchments:${c.reset}`);
-  withDist.slice(0, 5).forEach((s) =>
+    .map((s) => {
+      const nameTokens = String(s.name ?? "").toLowerCase().split(/[^a-z0-9]+/);
+      const hits = qTokens.filter((t) => nameTokens.includes(t));
+      return { ...s, km: Math.hypot(s.easting - bng.easting, s.northing - bng.northing) / 1000, hits };
+    });
+
+  const named = withDist.filter((s) => s.hits.length >= 2).sort((a, b) => a.km - b.km);
+  if (named.length) {
+    console.log(`  ${c.green}${c.bold}→ NAME MATCH (both river and place):${c.reset}`);
+    named.slice(0, 3).forEach((s) =>
+      console.log(`     ${c.green}${s.id} ${s.name} - ${s.km.toFixed(1)} km from anchor, ${s["catchment-area"]} km²${c.reset}`));
+    nearest = named[0];
+  }
+
+  const byDist = withDist.sort((a, b) => a.km - b.km);
+  console.log(`  ${c.dim}→ nearest by distance:${c.reset}`);
+  byDist.slice(0, 5).forEach((s) =>
     console.log(`     ${c.dim}${s.id} ${s.name} (${s.river}) - ${s.km.toFixed(1)} km, ${s["catchment-area"]} km²${c.reset}`));
+  nearest = nearest ?? byDist[0];
 }
 if (nearest) {
-  const full = await get(`full record for ${nearest.id}`,
+  const full = await get(`full record for ${nearest.id} (${nearest.name})`,
     `https://nrfaapps.ceh.ac.uk/nrfa/ws/station-info?format=json-object&station=${nearest.id}&fields=all`);
   const rec = full?.data?.[0];
   if (rec) {
     console.log(`  ${c.green}${c.bold}ALL NRFA FIELDS (${Object.keys(rec).length}):${c.reset}`);
     console.log(`     ${c.dim}${Object.keys(rec).join(", ")}${c.reset}`);
-    // The fields that bear on sediment character.
     const interesting = Object.entries(rec).filter(([k]) =>
       /geolog|aquifer|bfi|perm|soil|urban|land|lcm|saar|propwet|area|elev|slope|sediment/i.test(k));
     if (interesting.length) {
@@ -187,7 +218,7 @@ await mkdir("probe-results", { recursive: true });
 const out = `probe-results/${slug}-v3.json`;
 await writeFile(out, JSON.stringify({
   query, probedAt: new Date().toISOString(),
-  resolved: { name: resolvedName, lat, lon, bng, matchedVariant, allMatches },
+  resolved: { name: resolvedName, lat, lon, bng, matchedVariant, allMatches, waterbodyPart, settlementPart },
   geology, raw,
 }, null, 2));
 
