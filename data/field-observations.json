@@ -1,0 +1,49 @@
+{
+  "_README": [
+    "What you actually saw at a site. The strongest evidence this project holds:",
+    "everything else is a guess, a lookup, or an inference.",
+    "",
+    "Each observation is tied to a siteId + waterbodyId so it is never applied to",
+    "the wrong water.",
+    "",
+    "`feed` is the most important field. A hydrocyclone separating deliberately",
+    "disturbed bed sediment is close to the easiest duty it will ever be given -",
+    "that feed is far coarser and more concentrated than the water normally runs.",
+    "It proves the unit separates and does not block. It says little about the",
+    "fine fraction that governs membrane loading. Be honest here.",
+    "  natural       - the water as it normally runs",
+    "  disturbed-bed - bed kicked up, dredged or agitated",
+    "  spiked        - dosed with a known material",
+    "",
+    "`doesNotShow` is not optional. Filling it in is what stops a good result",
+    "being over-read later, by you or by an agent."
+  ],
+  "observations": [
+    {
+      "id": "tilford-2025-bed-sediment",
+      "siteId": "tilford",
+      "waterbodyId": "river-wey-tilford",
+      "siteName": "Tilford, River Wey",
+      "date": null,
+      "observer": null,
+      "kind": "separation-confirmed",
+      "feed": "disturbed-bed",
+      "hydrocycloneIds": ["4mm", "10mm"],
+      "membraneIds": [],
+      "observation": "Riverbed sediment was deliberately disturbed upstream and the water processed through the system. Physical separation was confirmed in both the 10 mm and the 4 mm hydrocyclone; solids reported to the underflow in both units.",
+      "shows": [
+        "Both units physically separate solids on water from this site.",
+        "Both passed a coarse, concentrated feed without blocking or bridging - a real operability result, and often where small-diameter cyclones fail.",
+        "The bed material at this reach contains a coarse fraction these units remove."
+      ],
+      "doesNotShow": [
+        "A cut size. Seeing separation does not tell you the size at which half the mass reports to the underflow.",
+        "A separation efficiency, or what fraction of the feed solids was removed.",
+        "Behaviour on the naturally suspended load, which is finer than disturbed bed material and is what governs membrane loading.",
+        "Any benefit to a downstream membrane - no membrane was run against a control."
+      ],
+      "confidence": "medium",
+      "evidenceRef": null
+    }
+  ]
+}

@@ -1,0 +1,12 @@
+{
+  "_README": [
+    "Every screening run. Append-only.",
+    "",
+    "The key is siteId + waterbodyId, NOT the text the user typed. Two spellings",
+    "of the same burn are the same site and must produce one entry, updated,",
+    "rather than two. `runs` counts how many times it has been screened.",
+    "",
+    "This is the prototype's whole persistence layer. There is no database."
+  ],
+  "entries": []
+}

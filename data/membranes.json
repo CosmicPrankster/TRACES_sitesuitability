@@ -1,0 +1,103 @@
+{
+  "_README": [
+    "Membrane / filter catalogue. One entry per filtration rating screened.",
+    "",
+    "TO POPULATE AN ENTRY FROM A PRODUCT PAGE: give an agent the URL and ask it",
+    "to fill in the `product` block. It should record only what the page states,",
+    "and set `product.populated` to true with the date and the source URL.",
+    "",
+    "`retentionUm` is the manufacturer's stated particle retention, which is NOT",
+    "always the same as the nominal pore size - record both when they differ.",
+    "",
+    "`rating` is 'nominal' or 'absolute' where the page says so, else 'unstated'.",
+    "A nominal-rated element passes a meaningful fraction of particles coarser",
+    "than its rating; an absolute one does not. This changes the screening."
+  ],
+  "membranes": [
+    {
+      "id": "0p45um",
+      "poreSizeUm": 0.45,
+      "label": "0.45 µm",
+      "enabled": true,
+      "product": {
+        "populated": false,
+        "manufacturer": null,
+        "productCode": null,
+        "material": null,
+        "retentionUm": null,
+        "rating": "unstated",
+        "sourceUrl": null,
+        "retrievedOn": null,
+        "notes": []
+      }
+    },
+    {
+      "id": "1p2um",
+      "poreSizeUm": 1.2,
+      "label": "1.2 µm",
+      "enabled": true,
+      "product": {
+        "populated": false,
+        "manufacturer": null,
+        "productCode": null,
+        "material": null,
+        "retentionUm": null,
+        "rating": "unstated",
+        "sourceUrl": null,
+        "retrievedOn": null,
+        "notes": []
+      }
+    },
+    {
+      "id": "5um",
+      "poreSizeUm": 5,
+      "label": "5 µm",
+      "enabled": true,
+      "product": {
+        "populated": false,
+        "manufacturer": null,
+        "productCode": null,
+        "material": null,
+        "retentionUm": null,
+        "rating": "unstated",
+        "sourceUrl": null,
+        "retrievedOn": null,
+        "notes": []
+      }
+    },
+    {
+      "id": "10um",
+      "poreSizeUm": 10,
+      "label": "10 µm",
+      "enabled": true,
+      "product": {
+        "populated": false,
+        "manufacturer": null,
+        "productCode": null,
+        "material": null,
+        "retentionUm": null,
+        "rating": "unstated",
+        "sourceUrl": null,
+        "retrievedOn": null,
+        "notes": []
+      }
+    },
+    {
+      "id": "20um",
+      "poreSizeUm": 20,
+      "label": "20 µm",
+      "enabled": true,
+      "product": {
+        "populated": false,
+        "manufacturer": null,
+        "productCode": null,
+        "material": null,
+        "retentionUm": null,
+        "rating": "unstated",
+        "sourceUrl": null,
+        "retrievedOn": null,
+        "notes": []
+      }
+    }
+  ]
+}

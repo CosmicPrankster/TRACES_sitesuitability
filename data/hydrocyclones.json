@@ -1,0 +1,65 @@
+{
+  "_README": [
+    "Hydrocyclone catalogue. One entry per unit.",
+    "",
+    "cut.d20Um / d50Um / d90Um are SEPARATION sizes: the particle size at which",
+    "20% / 50% / 90% of the mass of that size reports to the underflow. They are",
+    "NOT membrane pore sizes and must never be treated as one.",
+    "",
+    "Every numeric field has a matching entry in `status`, which is one of:",
+    "  guessed        - a starting estimate. Not measured, not from a datasheet.",
+    "  field-adjusted - revised from field observations. See `revisions`.",
+    "  measured       - from a rig test or datasheet. Cite it in `source`.",
+    "",
+    "To adjust a parameter from field data, change the value, set its status,",
+    "and append to `revisions`. Never change a value without a revision entry."
+  ],
+  "hydrocyclones": [
+    {
+      "id": "4mm",
+      "name": "4 mm hydrocyclone",
+      "diameterMm": 4,
+      "cut": { "d20Um": 3, "d50Um": 8, "d90Um": 25 },
+      "operating": {
+        "flowLpmMin": 1.5,
+        "flowLpmMax": 6,
+        "pressureBarMin": 1.0,
+        "pressureBarMax": 4.0
+      },
+      "status": {
+        "diameterMm": "measured",
+        "cut": "guessed",
+        "operating": "guessed"
+      },
+      "source": "Diameter is the nominal designation. All performance values are guesses.",
+      "notes": [
+        "A smaller body gives a finer cut than a larger one at comparable conditions. That ordering is the only thing these guesses are anchored to.",
+        "Highest-value measurement: size the feed and the overflow on the same run to get a real d50."
+      ],
+      "revisions": []
+    },
+    {
+      "id": "10mm",
+      "name": "10 mm hydrocyclone",
+      "diameterMm": 10,
+      "cut": { "d20Um": 6, "d50Um": 15, "d90Um": 45 },
+      "operating": {
+        "flowLpmMin": 8,
+        "flowLpmMax": 25,
+        "pressureBarMin": 0.5,
+        "pressureBarMax": 3.0
+      },
+      "status": {
+        "diameterMm": "measured",
+        "cut": "guessed",
+        "operating": "guessed"
+      },
+      "source": "Diameter is the nominal designation. All performance values are guesses.",
+      "notes": [
+        "Coarser cut than the 4 mm unit, and passes considerably more flow.",
+        "Highest-value measurement: size the feed and the overflow on the same run to get a real d50."
+      ],
+      "revisions": []
+    }
+  ]
+}
