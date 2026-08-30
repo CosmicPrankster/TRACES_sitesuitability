@@ -1,0 +1,79 @@
+{
+  "_README": [
+    "FILTRATION TRIALS - the most valuable data in this project.",
+    "",
+    "A trial measures the thing the screening is actually trying to predict:",
+    "how much MORE water goes through a filter when the feed has been through a",
+    "hydrocyclone first. Everything else in this repository is an attempt to",
+    "estimate that number from geology and assumed particle sizes. A trial",
+    "measures it directly, and always beats the estimate.",
+    "",
+    "The shape the user described is exactly right:",
+    "  'with a 5 um filter of 47 mm diameter of this material, before",
+    "   hydrocyclone processing we got through 50 mL, then after hydrocyclone",
+    "   processing the overflow got 75 mL'",
+    "  -> volumeRatio 1.5",
+    "",
+    "-----------------------------------------------------------------------",
+    "WHAT TO RECORD, AND WHY EACH FIELD MATTERS",
+    "-----------------------------------------------------------------------",
+    "volumeBeforeMl / volumeAfterMl",
+    "    The measurement. 'After' is the hydrocyclone OVERFLOW - the stream a",
+    "    plant would actually send to the membrane - not the underflow.",
+    "",
+    "terminalCondition   THE FIELD MOST OFTEN FORGOTTEN.",
+    "    'How did you decide to stop?' A volume filtered to complete blockage",
+    "    is not comparable with one filtered for five minutes, or to a fixed",
+    "    vacuum. Without this the two numbers cannot be compared at all, and",
+    "    the trial is unusable. Be specific.",
+    "",
+    "filter.poreSizeUm / diameterMm",
+    "    Area scales with diameter squared, so a 47 mm disc passes about four",
+    "    times what a 25 mm disc does. Volumes are meaningless without it.",
+    "",
+    "feed.material / feed.preparation",
+    "    A hydrocyclone's performance depends on what it is fed. Crushed",
+    "    aquarium soil is not river silt. Recording preparation is what makes",
+    "    a bench result transferable - or honestly marks it as not.",
+    "",
+    "feed.concentrationMgL",
+    "    Optional but valuable: volume scales as 1/sqrt(concentration), so two",
+    "    trials at different loadings are not directly comparable without it.",
+    "",
+    "replicates",
+    "    One pair of numbers is an anecdote. Three is a result. Record how many",
+    "    and the spread if you have it.",
+    "-----------------------------------------------------------------------"
+  ],
+  "trials": [
+    {
+      "id": "aquarium-soil-bench-001",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneId": null,
+      "feed": {
+        "material": "Aquarium soil",
+        "preparation": "Supplied as pellets, crushed with a pestle and mortar before use.",
+        "concentrationMgL": null,
+        "psdMeasured": false,
+        "note": "A bench feed, not a natural water. Useful for characterising the hydrocyclone itself; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": null,
+        "diameterMm": null,
+        "material": null
+      },
+      "terminalCondition": null,
+      "volumeBeforeMl": null,
+      "volumeAfterMl": null,
+      "replicates": null,
+      "status": "awaiting-data",
+      "notes": [
+        "Placeholder created from the description given. Fill in the numbers and set status to 'recorded'.",
+        "volumeRatio is deliberately NOT stored - it is computed from the two volumes, so it can never drift out of step with them."
+      ]
+    }
+  ]
+}

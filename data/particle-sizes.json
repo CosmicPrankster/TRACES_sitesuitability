@@ -1,0 +1,54 @@
+{
+  "_README": [
+    "ASSUMED PARTICLE SIZE DISTRIBUTIONS - one per solids character.",
+    "",
+    "This is the SITE's suspended sediment, not anything about the hydrocyclone.",
+    "It is used ONLY when no site-specific measurement exists. The moment a real",
+    "PSD or a filtration trial is recorded in data/field-observations.json for a",
+    "site, that supersedes everything here.",
+    "",
+    "EVERY NUMBER IN THIS FILE IS A GUESS. They are starting estimates chosen so",
+    "the screening can run at all, and they are the weakest link in the whole",
+    "chain - weaker than the geology, weaker than the cut sizes. Every verdict",
+    "downstream inherits that. Edit them freely as field evidence accumulates.",
+    "",
+    "d10/d50/d90 are micrometres: the size below which 10 / 50 / 90 % of the",
+    "SOLIDS MASS lies. A log-normal curve is fitted through them.",
+    "",
+    "THE TRAP THESE NUMBERS MUST AVOID: the suspended load of a river is",
+    "normally much finer than its bed material. A sandy riverbed does not mean",
+    "sandy suspended solids. Sand sits on the bed; what stays in suspension is",
+    "the fine tail. If these figures start looking optimistic in the field, this",
+    "is almost certainly why."
+  ],
+  "profiles": {
+    "sand": {
+      "d10Um": 8,
+      "d50Um": 60,
+      "d90Um": 250,
+      "status": "guessed",
+      "note": "Sand-dominated suspended load. Coarse enough that a hydrocyclone has real material to work on. Most likely to be over-optimistic: see the trap above."
+    },
+    "mixed_mineral": {
+      "d10Um": 3,
+      "d50Um": 25,
+      "d90Um": 120,
+      "status": "guessed",
+      "note": "Mixed mineral load spanning silt into fine sand. The middle case."
+    },
+    "silt": {
+      "d10Um": 2,
+      "d50Um": 15,
+      "d90Um": 60,
+      "status": "guessed",
+      "note": "Silt-dominated. Mostly at or below the cut size of a small hydrocyclone."
+    },
+    "clay": {
+      "d10Um": 0.6,
+      "d50Um": 3,
+      "d90Um": 15,
+      "status": "guessed",
+      "note": "Clay-dominated, cohesive. Almost entirely below any small hydrocyclone's cut size. Expect the screening to say so."
+    }
+  }
+}

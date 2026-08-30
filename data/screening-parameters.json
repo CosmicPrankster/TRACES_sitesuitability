@@ -1,0 +1,48 @@
+{
+  "_README": [
+    "The judgement calls, in one editable place. These are not physics; they are",
+    "where a line gets drawn. Change them here rather than in code.",
+    "",
+    "-----------------------------------------------------------------------",
+    "WHY THE VOLUME TARGETS TRANSLATE INTO A LOAD REDUCTION",
+    "-----------------------------------------------------------------------",
+    "For dead-end cake filtration at roughly constant pressure, the volume",
+    "filtered before the cake blinds the element scales as:",
+    "",
+    "    V  proportional to  1 / sqrt(alpha * c)",
+    "",
+    "where c is the solids concentration and alpha is the SPECIFIC CAKE",
+    "RESISTANCE. Carman-Kozeny gives alpha proportional to 1/d^2, so fine",
+    "particles resist far more per unit mass than coarse ones.",
+    "",
+    "Because volume goes as the INVERSE SQUARE ROOT of the load, the reduction",
+    "needed to hit a volume target is much larger than the target itself:",
+    "",
+    "    1.5x volume  ->  need (alpha*c) cut to 1/1.5^2 = 44 %  ->  56 % reduction",
+    "    2.0x volume  ->  need (alpha*c) cut to 1/2.0^2 = 25 %  ->  75 % reduction",
+    "",
+    "That is the single most important number in this application. Removing",
+    "half the fouling load does NOT halve the run length - it buys about 1.4x.",
+    "-----------------------------------------------------------------------"
+  ],
+  "volumeTargets": {
+    "promisingVolumeRatio": 1.5,
+    "strongVolumeRatio": 2.0,
+    "note": "Set by the user: 'promising' means the agent can reason to roughly 150 % of the untreated filterable volume."
+  },
+  "cakeResistanceExponent": {
+    "value": 2,
+    "status": "published",
+    "source": "Carman-Kozeny: specific cake resistance is proportional to 1/d^2 for an incompressible cake of near-spherical particles.",
+    "note": "Set to 2 for the standard relationship. Lower it toward 1 if field data suggests the cake is compressible or the fines are platy, both of which flatten the size dependence."
+  },
+  "minimumRetainedMassFraction": {
+    "value": 0.02,
+    "status": "guessed",
+    "note": "Below this fraction of feed solids being coarse enough for the membrane to retain, there is almost nothing there to remove and the benefit is called marginal regardless of how efficiently the cyclone removes it."
+  },
+  "flocDensityPenalty": {
+    "applied": false,
+    "note": "Cohesive clay flocs entrain water, so their effective density is far below the mineral density, and centrifugal separation depends on the density difference rather than on size alone. This SHOULD reduce hydrocyclone performance on clay beyond what size predicts. It is deliberately NOT modelled: doing so needs a defensible relationship between floc size, effective density and separation efficiency, and no source has been checked for that yet. Left off rather than invented."
+  }
+}
