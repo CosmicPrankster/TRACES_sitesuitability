@@ -195,20 +195,26 @@ function clamp(v: number, lo: number, hi: number): number {
  *
  * Build this as `lib/separation.ts`:
  *
- *   1. Read data/hydrocyclones.json for the fallback d20/d50/d90 cut sizes.
- *      These are GUESSES. Three points define the shape of a grade-efficiency
- *      curve, which is better than a single cut size plus an assumed sharpness.
- *      Fit a curve through them - the reduced form
+ *   1. DONE. Read data/hydrocyclones.json for the fallback d20/d50/d90 cut
+ *      sizes. These are GUESSES. Three points define the shape of a
+ *      grade-efficiency curve, which is better than a single cut size plus
+ *      an assumed sharpness. Fit a curve through them - the reduced form
  *        G(d) = (d/d50)^m / (1 + (d/d50)^m)
  *      passes through 50 % at d50 by construction; solve m so the curve also
- *      passes near d20 and d90.
+ *      passes near d20 and d90. See `fitSharpness` / `gradeEfficiencyCurve` /
+ *      `gradeEfficiency` in lib/separation.ts, tested in tests/separation.test.ts.
  *
- *   2. Read data/trials.json for real before/after evidence. Where a trial
- *      exists for this hydrocyclone AND a comparable feed material, it
- *      supersedes the fitted curve. Say so in the output.
+ *   2. NOT STARTED. Read data/trials.json for real before/after evidence.
+ *      Where a trial exists for this hydrocyclone AND a comparable feed
+ *      material, it supersedes the fitted curve. Say so in the output.
+ *      What counts as "a comparable feed material" is a judgement call -
+ *      confirm it with the user before coding it, rather than guessing.
  *
- *   3. Never let a guessed curve be reported as measured. Carry the status
- *      through, exactly as the geology and character modules do.
+ *   3. NOT STARTED. Never let a guessed curve be reported as measured. Carry
+ *      the status through, exactly as the geology and character modules do.
+ *      (Step 1 already carries `hydrocyclone.status.cut` through unchanged;
+ *      this item is about combining that with the trial's own status once
+ *      step 2 exists.)
  *
  * A new hydrocyclone or a new feed material must be addable by editing JSON
  * only. No code change.

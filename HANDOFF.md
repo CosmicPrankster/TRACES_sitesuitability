@@ -46,15 +46,25 @@ this document, take that.
 | 3 Site resolution | done, tested | `lib/resolve.ts` |
 | 4 Character inference | done, validated on 5 rivers | `lib/character.ts`, `lib/geology.ts` |
 | **5a PSD** | **done, tested** | `lib/psd.ts` |
-| 5b Separation | **not started** | plain-English spec at the foot of `lib/psd.ts` |
+| 5b Separation | **in progress - fitted curve only, no trial override yet** | `lib/separation.ts` |
 | 5c Membrane retention | not started | same |
 | 5d Assessment | not started | same |
 | 5e Report | not started | same |
 | 6 UI | not started | — |
 | 7 AI layer | not started | — |
 
-`npm test` — 112 tests, no network, no API keys.
+`npm test` — 123 tests, no network, no API keys.
 `node scripts/probe.mjs "Tilford, River Wey"` — needs internet.
+
+**5b so far:** `lib/separation.ts` fits a grade-efficiency curve
+`G(d) = (d/d50)^m / (1 + (d/d50)^m)` to the guessed d20/d50/d90 cut sizes in
+`data/hydrocyclones.json`, with `m` fitted against d20 and d90 and averaged.
+That is the whole increment. It deliberately does NOT yet read
+`data/trials.json` to override the fitted curve when real before/after
+evidence exists — that needs a judgement call (what counts as "a comparable
+feed material") that should be confirmed before it is coded, so it is left
+for the next step rather than guessed at. See the "NOT YET BUILT" block at
+the foot of `lib/separation.ts`.
 
 **The specification for 5b–5e is written out in plain English at the bottom of
 `lib/psd.ts`.** Start there.

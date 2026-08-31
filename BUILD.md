@@ -9,7 +9,7 @@ it works, not when it has been written.
 | 2 | Data-source probe | **done** | v1 + v2 run live on two real sites |
 | 3 | Site + waterbody resolution | **logic done** | 18 tests; live path in probe v3 |
 | 4 | Catchment + geology → character | **logic done** | 32 tests against real NRFA + BGS records |
-| 5 | Screening engine | not started | |
+| 5 | Screening engine | **in progress (5a done, 5b started)** | 5a: 17 tests. 5b so far (fitted grade-efficiency curve only, no trial override yet): 11 tests |
 | 6 | UI | not started | |
 | 7 | AI conversation layer | not started | |
 

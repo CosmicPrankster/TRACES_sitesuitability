@@ -8,7 +8,7 @@ stands, the physics that governs it, and the traps that have already caught us.
 
 ```bash
 npm install
-npm test                                    # 112 tests, no network needed
+npm test                                    # 123 tests, no network needed
 node scripts/probe.mjs "Tilford, River Wey" # needs internet
 ```
 
