@@ -8,6 +8,8 @@ import {
   normCdf,
   normInv,
   psdForCharacter,
+  sigmaLower,
+  sigmaUpper,
   sizeAtPercentile,
 } from "@/lib/psd";
 
@@ -34,8 +36,6 @@ describe("the fitted distribution reproduces its own percentiles", () => {
   });
 
   it("spans d10 to d90 as specified", () => {
-    // A single log-normal cannot pass through three arbitrary points, so the
-    // fit is anchored on d50 with the spread taken from the d90/d10 ratio.
     expect(sizeAtPercentile(sand, 90) / sizeAtPercentile(sand, 10))
       .toBeCloseTo(sand.d90Um / sand.d10Um, 3);
   });
@@ -53,6 +53,43 @@ describe("the fitted distribution reproduces its own percentiles", () => {
     for (const size of [0.5, 2, 10, 50, 300]) {
       expect(fractionFinerThan(sand, size) + fractionCoarserThan(sand, size)).toBeCloseTo(1, 6);
     }
+  });
+});
+
+describe("the fit honours d10 and d90 exactly, not just their ratio", () => {
+  // sand/mixed_mineral/silt are NOT self-consistent with a single log-normal
+  // (d50 != sqrt(d10*d90)) - a single-sigma fit anchored on d50 and the outer
+  // ratio alone (the old approach) silently missed these endpoints by up to
+  // ~35%. The two-piece fit below fits sigma separately on each side of the
+  // median, so it must hit d10 and d90 exactly regardless of that mismatch.
+  it("puts exactly 10% of mass below d10 and 90% below d90, for every profile", () => {
+    for (const character of ["sand", "mixed_mineral", "silt", "clay"] as const) {
+      const psd = psdForCharacter(character);
+      expect(fractionFinerThan(psd, psd.d10Um)).toBeCloseTo(0.1, 6);
+      expect(fractionFinerThan(psd, psd.d90Um)).toBeCloseTo(0.9, 6);
+    }
+  });
+
+  it("inverts back to d10Um and d90Um via sizeAtPercentile, for every profile", () => {
+    for (const character of ["sand", "mixed_mineral", "silt", "clay"] as const) {
+      const psd = psdForCharacter(character);
+      expect(sizeAtPercentile(psd, 10)).toBeCloseTo(psd.d10Um, 6);
+      expect(sizeAtPercentile(psd, 90)).toBeCloseTo(psd.d90Um, 6);
+    }
+  });
+
+  it("uses different sigmas either side of the median when d10/d50/d90 are skewed", () => {
+    // sand: d50=60 != sqrt(8*250)=44.7, so the two sides must differ.
+    const sand = psdForCharacter("sand");
+    expect(sigmaLower(sand)).not.toBeCloseTo(sigmaUpper(sand), 2);
+  });
+
+  it("collapses to a single symmetric sigma when d10/d50/d90 already agree", () => {
+    // clay: d50=3 == sqrt(0.6*15)=3 exactly, so the two sides must match,
+    // and both must equal the old single-sigma (average) value.
+    const clay = psdForCharacter("clay");
+    expect(sigmaLower(clay)).toBeCloseTo(sigmaUpper(clay), 9);
+    expect(sigmaLower(clay)).toBeCloseTo(Math.log(geometricStdDev(clay)), 9);
   });
 });
 

@@ -11,8 +11,11 @@ import type { ParticleCharacter } from "./character";
  * data/trials.json always supersedes it.
  *
  * A log-normal curve is fitted through the d10/d50/d90 in
- * data/particle-sizes.json. Log-normal is the standard working assumption for
- * sediment: it is a modelling choice, and it is reported as one.
+ * data/particle-sizes.json - a different spread below the median than above
+ * it, so all three points land exactly where labelled (see the note on
+ * sigmaLower/sigmaUpper below). Log-normal is the standard working
+ * assumption for sediment: it is a modelling choice, and it is reported as
+ * one.
  */
 
 export interface Psd {
@@ -83,8 +86,42 @@ const Z90 = 1.2815515655446004;
 /* ------------------------------------------------------------------ */
 
 /**
+ * A single log-normal has two degrees of freedom (median, spread) but three
+ * input points (d10, d50, d90), which are only mutually consistent with one
+ * log-normal when d50 happens to equal sqrt(d10 * d90) - true for none of
+ * the current guessed profiles except clay. Fitting one sigma from the
+ * outer d90/d10 ratio alone (the previous approach) silently missed d10 and
+ * d90 themselves by up to 35% on the current data: it honoured the median
+ * and the overall spread, not the two endpoints the numbers are named after.
+ *
+ * Fixed by using a two-piece (split) log-normal instead: a different sigma
+ * below the median than above it, each solved so its own endpoint lands
+ * exactly on target. The two pieces are both valid log-normal CDFs anchored
+ * at the same median, so they join continuously at exactly 0.5 - this is a
+ * standard technique for building a distribution from three quantiles, not
+ * an ad hoc patch.
+ */
+
+/** Log-space standard deviation for sizes at or below the median, fit to d10. */
+export function sigmaLower(psd: Psd): number {
+  return Math.log(Math.max(psd.d50Um / psd.d10Um, 1.0001)) / Z90;
+}
+
+/** Log-space standard deviation for sizes above the median, fit to d90. */
+export function sigmaUpper(psd: Psd): number {
+  return Math.log(Math.max(psd.d90Um / psd.d50Um, 1.0001)) / Z90;
+}
+
+/**
  * Geometric standard deviation implied by d10 and d90.
  * ln(d90) - ln(d10) spans 2 x 1.2816 standard deviations in log space.
+ *
+ * A SUMMARY statistic only - "how spread out is this, overall" - for
+ * reporting and sanity-checking. It is exactly the average of
+ * sigmaLower/sigmaUpper (the two telescope: half of ln(d90/d10) either way),
+ * so it stays meaningful, but percentile calculations use the two-piece
+ * sigmas above, not this one, because this one alone cannot reproduce d10
+ * and d90 individually - see the note above.
  */
 export function geometricStdDev(psd: Psd): number {
   return Math.exp(Math.log(psd.d90Um / psd.d10Um) / (2 * Z90));
@@ -93,7 +130,7 @@ export function geometricStdDev(psd: Psd): number {
 /** Mass fraction (0..1) of solids finer than `sizeUm`. */
 export function fractionFinerThan(psd: Psd, sizeUm: number): number {
   if (!(sizeUm > 0)) return 0;
-  const sigma = Math.log(Math.max(geometricStdDev(psd), 1.0001));
+  const sigma = sizeUm <= psd.d50Um ? sigmaLower(psd) : sigmaUpper(psd);
   return clamp(normCdf(Math.log(sizeUm / psd.d50Um) / sigma), 0, 1);
 }
 
@@ -109,8 +146,9 @@ export function massFractionBetween(psd: Psd, fromUm: number, toUm: number): num
 
 /** Size below which `percent` % of the mass lies. */
 export function sizeAtPercentile(psd: Psd, percent: number): number {
-  const sigma = Math.log(Math.max(geometricStdDev(psd), 1.0001));
-  return psd.d50Um * Math.exp(normInv(clamp(percent / 100, 0.0001, 0.9999)) * sigma);
+  const z = normInv(clamp(percent / 100, 0.0001, 0.9999));
+  const sigma = z <= 0 ? sigmaLower(psd) : sigmaUpper(psd);
+  return psd.d50Um * Math.exp(z * sigma);
 }
 
 /**
