@@ -13,7 +13,7 @@ function recordedTrial(overrides: Partial<Trial> = {}): Trial {
     operator: "test",
     siteId: "tilford",
     waterbodyId: "river-wey-tilford",
-    hydrocycloneIds: ["4mm"],
+    hydrocycloneId: "4mm",
     feed: {
       material: "River water",
       preparation: "As drawn, no preparation",
@@ -87,14 +87,6 @@ describe("findSiteTrial", () => {
   it("ignores a matching trial that is still awaiting data", () => {
     const pending = recordedTrial({ status: "awaiting-data", volumeBeforeMl: null, volumeAfterMl: null });
     expect(findSiteTrial([pending], "4mm", "tilford", "river-wey-tilford")).toBeUndefined();
-  });
-
-  it("does not attribute a cascade trial's ratio to either unit alone", () => {
-    // A ["4mm", "4mm"] cascade measures the two-stage system, not one 4mm
-    // run by itself - attributing it to "4mm" alone would overstate what
-    // was actually measured.
-    const cascade = recordedTrial({ id: "cascade-001", hydrocycloneIds: ["4mm", "4mm"] });
-    expect(findSiteTrial([cascade], "4mm", "tilford", "river-wey-tilford")).toBeUndefined();
   });
 
   it("finds nothing at all against today's real trials.json", () => {

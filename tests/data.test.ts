@@ -136,12 +136,24 @@ describe("trials", () => {
     }
   });
 
-  it("records the 10mm-alone and 10mm+10mm cascade as distinct treatment stages", () => {
-    const single = trials.filter((t) => t.hydrocycloneIds.length === 1);
-    const cascade = trials.filter((t) => t.hydrocycloneIds.length === 2);
-    expect(single.length).toBe(5);
+  it("gives every trial a single hydrocycloneId - '10mm', not a stage sequence", () => {
+    // Whether a run was a single pass or a cascade is not structured data
+    // here; it's free text in notes, for a reader (or a future AI layer)
+    // to weigh, not logic baked into the schema.
+    expect(trials.every((t) => t.hydrocycloneId === "10mm")).toBe(true);
+  });
+
+  it("describes the 5 cascade trials' extra stage in plain-text notes", () => {
+    const cascade = trials.filter((t) => t.id.includes("cascade"));
     expect(cascade.length).toBe(5);
-    expect(cascade.every((t) => t.hydrocycloneIds.join() === "10mm,10mm")).toBe(true);
+    for (const t of cascade) {
+      expect(t.notes.join(" ")).toMatch(/2 hydrocyclone stages in series/);
+    }
+    const single = trials.filter((t) => !t.id.includes("cascade"));
+    expect(single.length).toBe(5);
+    for (const t of single) {
+      expect(t.notes.join(" ")).not.toMatch(/stages in series/);
+    }
   });
 
   it("shows the cascade outperforming a single pass at every concentration", () => {
@@ -251,15 +263,15 @@ describe("the validator actually rejects bad data", () => {
     expect(problems(h)).toMatch(/terminalCondition/);
   });
 
-  it("catches a recorded trial with no hydrocycloneIds at all", () => {
+  it("catches a recorded trial with no hydrocycloneId at all", () => {
     const h = structuredClone(good);
-    h.trials[0].hydrocycloneIds = [];
-    expect(problems(h)).toMatch(/at least one hydrocycloneId/);
+    h.trials[0].hydrocycloneId = null;
+    expect(problems(h)).toMatch(/must reference a hydrocycloneId/);
   });
 
   it("catches a trial referencing an unknown hydrocyclone", () => {
     const h = structuredClone(good);
-    h.trials[0].hydrocycloneIds = ["99mm"];
+    h.trials[0].hydrocycloneId = "99mm";
     expect(problems(h)).toMatch(/unknown hydrocyclone "99mm"/);
   });
 

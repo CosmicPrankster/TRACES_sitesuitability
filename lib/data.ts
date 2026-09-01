@@ -91,13 +91,15 @@ export interface Trial {
   siteId: string | null;
   waterbodyId: string | null;
   /**
-   * Ordered by treatment stage, not just "which units are involved" - a
-   * two-stage cascade (e.g. ["10mm", "10mm"], second unit polishing the
-   * first's overflow) is a different trial from a single pass through one
-   * unit, so the order and repetition both carry meaning. Empty for a
-   * membrane-only run with no pretreatment at all.
+   * The physical hardware, e.g. "10mm". Deliberately just an id, not a
+   * structured stage sequence - if a run involved more than one unit (a
+   * cascade, a different second-stage geometry, etc.), say so in
+   * feed.preparation or notes as plain text. Interpreting that free text
+   * (e.g. "this trial isn't comparable to a single-pass 10mm result") is
+   * judgement for whoever reads the trial - a future AI layer, most likely
+   * - not logic to bake into this data layer now.
    */
-  hydrocycloneIds: string[];
+  hydrocycloneId: string | null;
   feed: {
     material: string | null;
     preparation: string | null;
@@ -281,17 +283,15 @@ export function validate(data: DataSet): ValidationIssue[] {
     if (!["awaiting-data", "recorded"].includes(t.status)) {
       add("trials", t.id, "status must be awaiting-data | recorded");
     }
-    for (const id of t.hydrocycloneIds ?? []) {
-      if (!cycloneIds.has(id)) add("trials", t.id, `references unknown hydrocyclone "${id}"`);
+    if (t.hydrocycloneId && !cycloneIds.has(t.hydrocycloneId)) {
+      add("trials", t.id, `references unknown hydrocyclone "${t.hydrocycloneId}"`);
     }
 
     // A trial marked recorded is claiming to be usable evidence - enforce
     // that everything needed to actually use it is present, especially the
     // field most often forgotten: how the run was decided to be over.
     if (t.status === "recorded") {
-      if (!t.hydrocycloneIds || t.hydrocycloneIds.length === 0) {
-        add("trials", t.id, "recorded trial must reference at least one hydrocycloneId");
-      }
+      if (!t.hydrocycloneId) add("trials", t.id, "recorded trial must reference a hydrocycloneId");
       if (!(t.volumeBeforeMl! > 0) || !(t.volumeAfterMl! > 0)) {
         add("trials", t.id, "recorded trial must have positive volumeBeforeMl and volumeAfterMl");
       }

@@ -43,14 +43,6 @@
     "replicates",
     "    One pair of numbers is an anecdote. Three is a result. Record how many",
     "    and the spread if you have it.",
-    "-----------------------------------------------------------------------",
-    "",
-    "-----------------------------------------------------------------------",
-    "hydrocycloneIds is an ORDERED array by treatment stage, not just a set of",
-    "units involved. [\"10mm\"] is a single pass; [\"10mm\", \"10mm\"] is a two-stage",
-    "cascade, the second unit polishing the first's overflow - a different",
-    "trial from either unit run alone, and its ratio must not be attributed",
-    "to a single unit (see lib/trials.ts findSiteTrial).",
     "-----------------------------------------------------------------------"
   ],
   "trials": [
@@ -60,9 +52,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 0.5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -99,10 +89,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm",
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 0.5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -121,6 +108,7 @@
       "replicates": 3,
       "status": "recorded",
       "notes": [
+        "This run used 2 hydrocyclone stages in series (10mm -> 10mm), not a single pass - see feed.preparation and the repeat-volume notes below for what was actually measured. hydrocycloneId records only the hardware type used, not the stage count.",
         "Repeat volumes (mL), baseline (no pretreatment): 468, 478, 426.",
         "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 3860, 3540, 3690.",
         "Nominal feed dose for this run: 0.5 g/L soil-in-water, before any treatment.",
@@ -139,9 +127,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 1 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -178,10 +164,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm",
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 1 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -200,6 +183,7 @@
       "replicates": 3,
       "status": "recorded",
       "notes": [
+        "This run used 2 hydrocyclone stages in series (10mm -> 10mm), not a single pass - see feed.preparation and the repeat-volume notes below for what was actually measured. hydrocycloneId records only the hardware type used, not the stage count.",
         "Repeat volumes (mL), baseline (no pretreatment): 139, 142, 136.",
         "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 2120, 2040, 2088.",
         "Nominal feed dose for this run: 1 g/L soil-in-water, before any treatment.",
@@ -218,9 +202,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 2 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -257,10 +239,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm",
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 2 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -279,6 +258,7 @@
       "replicates": 3,
       "status": "recorded",
       "notes": [
+        "This run used 2 hydrocyclone stages in series (10mm -> 10mm), not a single pass - see feed.preparation and the repeat-volume notes below for what was actually measured. hydrocycloneId records only the hardware type used, not the stage count.",
         "Repeat volumes (mL), baseline (no pretreatment): 198, 206, 185.",
         "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 1632, 1672, 1552.",
         "Nominal feed dose for this run: 2 g/L soil-in-water, before any treatment.",
@@ -297,9 +277,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -336,10 +314,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm",
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -358,6 +333,7 @@
       "replicates": 3,
       "status": "recorded",
       "notes": [
+        "This run used 2 hydrocyclone stages in series (10mm -> 10mm), not a single pass - see feed.preparation and the repeat-volume notes below for what was actually measured. hydrocycloneId records only the hardware type used, not the stage count.",
         "Repeat volumes (mL), baseline (no pretreatment): 199, 193, 198.",
         "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 984, 936, 1008.",
         "Nominal feed dose for this run: 5 g/L soil-in-water, before any treatment.",
@@ -376,9 +352,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 10 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -415,10 +389,7 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneIds": [
-        "10mm",
-        "10mm"
-      ],
+      "hydrocycloneId": "10mm",
       "feed": {
         "material": "Garden/aquarium soil (crushed pellets) suspended in water",
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 10 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
@@ -437,6 +408,7 @@
       "replicates": 3,
       "status": "recorded",
       "notes": [
+        "This run used 2 hydrocyclone stages in series (10mm -> 10mm), not a single pass - see feed.preparation and the repeat-volume notes below for what was actually measured. hydrocycloneId records only the hardware type used, not the stage count.",
         "Repeat volumes (mL), baseline (no pretreatment): 67, 72, 59.",
         "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 496, 448, 488.",
         "Nominal feed dose for this run: 10 g/L soil-in-water, before any treatment.",
