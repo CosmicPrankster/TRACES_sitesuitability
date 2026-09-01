@@ -136,6 +136,19 @@ export function readLithology(lithology: string | null): LithologySignal | null 
   return rule ? { coarseness: rule.coarseness, meaning: rule.meaning } : null;
 }
 
+/**
+ * Whether a bedrock lithology is crystalline (igneous or metamorphic) - the
+ * flag lib/character.ts's permeability-trap override needs. NRFA classes all
+ * such rock "low permeability", which reads as fine unless this is set;
+ * granite and psammite are impermeable AND weather to coarse sand.
+ */
+const CRYSTALLINE_PATTERN =
+  /\b(granite|basalt|dolerite|gabbro|andesite|rhyolite|tuff|igneous|volcanic|psammite|semipelite|quartzite|pelite|slate|phyllite|schist|gneiss|metamorphic)\b/i;
+
+export function isCrystallineBedrock(lithology: string | null): boolean {
+  return !!lithology && CRYSTALLINE_PATTERN.test(lithology);
+}
+
 /* -------------------------------------------------------------------- */
 
 export interface GeologyAtPoint {

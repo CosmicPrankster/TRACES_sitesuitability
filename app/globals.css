@@ -64,6 +64,59 @@ main {
   color: var(--text-muted);
 }
 
+.site-input-row {
+  display: flex;
+  gap: 0.5rem;
+  width: 100%;
+}
+
+.site-input-row input {
+  flex: 1;
+  font-size: 0.95rem;
+  padding: 0.4rem 0.6rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+}
+
+.site-input-row button {
+  font-size: 0.9rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.site-input-row button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.live-status {
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1rem;
+  font-size: 0.92rem;
+}
+
+.live-status ul {
+  margin: 0.4rem 0 0;
+  padding-left: 1.25rem;
+}
+
+.live-error {
+  background: var(--unlikely-bg);
+  color: var(--unlikely);
+  border: 1px solid var(--unlikely);
+}
+
+.live-ok {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+
 .input-row select {
   font-size: 0.95rem;
   padding: 0.35rem 0.5rem;

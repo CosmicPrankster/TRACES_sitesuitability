@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isCrystallineBedrock,
   parseBgsFeatureInfo,
   readLithology,
   summariseGeology,
@@ -138,6 +139,22 @@ describe("Highland lithologies (Spey, real data)", () => {
   it("reads the real Spey superficial deposit as coarse", () => {
     const s = readLithology("Sand, gravel and boulders")!;
     expect(s.coarseness).toBeGreaterThan(0.5);
+  });
+});
+
+describe("isCrystallineBedrock", () => {
+  it("flags the real Spey bedrock - the exact case the override exists for", () => {
+    expect(isCrystallineBedrock("Micaceous psammite")).toBe(true);
+  });
+
+  it("does not flag sedimentary rock, even impermeable sedimentary rock", () => {
+    expect(isCrystallineBedrock("Mudstone")).toBe(false);
+    expect(isCrystallineBedrock("Sandstone")).toBe(false);
+    expect(isCrystallineBedrock("Chalk")).toBe(false);
+  });
+
+  it("returns false for null, never throws", () => {
+    expect(isCrystallineBedrock(null)).toBe(false);
   });
 });
 
