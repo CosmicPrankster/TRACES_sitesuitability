@@ -90,7 +90,14 @@ export interface Trial {
   operator: string | null;
   siteId: string | null;
   waterbodyId: string | null;
-  hydrocycloneId: string | null;
+  /**
+   * Ordered by treatment stage, not just "which units are involved" - a
+   * two-stage cascade (e.g. ["10mm", "10mm"], second unit polishing the
+   * first's overflow) is a different trial from a single pass through one
+   * unit, so the order and repetition both carry meaning. Empty for a
+   * membrane-only run with no pretreatment at all.
+   */
+  hydrocycloneIds: string[];
   feed: {
     material: string | null;
     preparation: string | null;
@@ -274,15 +281,17 @@ export function validate(data: DataSet): ValidationIssue[] {
     if (!["awaiting-data", "recorded"].includes(t.status)) {
       add("trials", t.id, "status must be awaiting-data | recorded");
     }
-    if (t.hydrocycloneId && !cycloneIds.has(t.hydrocycloneId)) {
-      add("trials", t.id, `references unknown hydrocyclone "${t.hydrocycloneId}"`);
+    for (const id of t.hydrocycloneIds ?? []) {
+      if (!cycloneIds.has(id)) add("trials", t.id, `references unknown hydrocyclone "${id}"`);
     }
 
     // A trial marked recorded is claiming to be usable evidence - enforce
     // that everything needed to actually use it is present, especially the
     // field most often forgotten: how the run was decided to be over.
     if (t.status === "recorded") {
-      if (!t.hydrocycloneId) add("trials", t.id, "recorded trial must reference a hydrocycloneId");
+      if (!t.hydrocycloneIds || t.hydrocycloneIds.length === 0) {
+        add("trials", t.id, "recorded trial must reference at least one hydrocycloneId");
+      }
       if (!(t.volumeBeforeMl! > 0) || !(t.volumeAfterMl! > 0)) {
         add("trials", t.id, "recorded trial must have positive volumeBeforeMl and volumeAfterMl");
       }

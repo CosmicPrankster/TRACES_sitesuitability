@@ -30,9 +30,15 @@ export function measuredVolumeRatio(trial: Trial): number | null {
 }
 
 /**
- * A recorded trial for this exact hydrocyclone, at this exact site and
- * waterbody. Returns undefined if none exists yet - that is "insufficient
- * data", never treated as a negative result.
+ * A recorded trial for this exact hydrocyclone alone, at this exact site
+ * and waterbody. Returns undefined if none exists yet - that is
+ * "insufficient data", never treated as a negative result.
+ *
+ * Deliberately does NOT match a multi-stage trial (e.g. a cascade recorded
+ * as hydrocycloneIds: ["10mm", "10mm"]) even if it contains this id - a
+ * cascade's measured ratio is evidence about the two-stage system, not
+ * about one unit run alone, and attributing it to a single hydrocyclone
+ * would overstate what was actually measured.
  */
 export function findSiteTrial(
   trials: Trial[],
@@ -43,7 +49,8 @@ export function findSiteTrial(
   return trials.find(
     (t) =>
       t.status === "recorded" &&
-      t.hydrocycloneId === hydrocycloneId &&
+      t.hydrocycloneIds.length === 1 &&
+      t.hydrocycloneIds[0] === hydrocycloneId &&
       t.siteId === siteId &&
       t.waterbodyId === waterbodyId,
   );

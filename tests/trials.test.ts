@@ -13,7 +13,7 @@ function recordedTrial(overrides: Partial<Trial> = {}): Trial {
     operator: "test",
     siteId: "tilford",
     waterbodyId: "river-wey-tilford",
-    hydrocycloneId: "4mm",
+    hydrocycloneIds: ["4mm"],
     feed: {
       material: "River water",
       preparation: "As drawn, no preparation",
@@ -47,9 +47,17 @@ describe("measuredVolumeRatio", () => {
     expect(measuredVolumeRatio(recordedTrial({ volumeBeforeMl: null }))).toBeNull();
   });
 
-  it("today's real placeholder trial yields no ratio - honestly insufficient data", () => {
-    const [placeholder] = loadTrials();
-    expect(measuredVolumeRatio(placeholder)).toBeNull();
+  it("computes real ratios from the recorded Oct24-Nov10 bench trials", () => {
+    const bench = loadTrials().find((t) => t.id === "aquarium-soil-bench-001")!;
+    // 1963.333 / 457.333 mL, from the real 10mm-alone bench data.
+    expect(measuredVolumeRatio(bench)).toBeCloseTo(4.293, 2);
+  });
+
+  it("the 10mm+10mm cascade measures a bigger ratio than 10mm alone, same feed", () => {
+    const trials = loadTrials();
+    const single = trials.find((t) => t.id === "aquarium-soil-bench-001")!;
+    const cascade = trials.find((t) => t.id === "oct24nov10-10mm-cascade-0p5gL")!;
+    expect(measuredVolumeRatio(cascade)!).toBeGreaterThan(measuredVolumeRatio(single)!);
   });
 });
 
@@ -79,6 +87,14 @@ describe("findSiteTrial", () => {
   it("ignores a matching trial that is still awaiting data", () => {
     const pending = recordedTrial({ status: "awaiting-data", volumeBeforeMl: null, volumeAfterMl: null });
     expect(findSiteTrial([pending], "4mm", "tilford", "river-wey-tilford")).toBeUndefined();
+  });
+
+  it("does not attribute a cascade trial's ratio to either unit alone", () => {
+    // A ["4mm", "4mm"] cascade measures the two-stage system, not one 4mm
+    // run by itself - attributing it to "4mm" alone would overstate what
+    // was actually measured.
+    const cascade = recordedTrial({ id: "cascade-001", hydrocycloneIds: ["4mm", "4mm"] });
+    expect(findSiteTrial([cascade], "4mm", "tilford", "river-wey-tilford")).toBeUndefined();
   });
 
   it("finds nothing at all against today's real trials.json", () => {

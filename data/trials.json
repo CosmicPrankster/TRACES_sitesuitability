@@ -43,6 +43,14 @@
     "replicates",
     "    One pair of numbers is an anecdote. Three is a result. Record how many",
     "    and the spread if you have it.",
+    "-----------------------------------------------------------------------",
+    "",
+    "-----------------------------------------------------------------------",
+    "hydrocycloneIds is an ORDERED array by treatment stage, not just a set of",
+    "units involved. [\"10mm\"] is a single pass; [\"10mm\", \"10mm\"] is a two-stage",
+    "cascade, the second unit polishing the first's overflow - a different",
+    "trial from either unit run alone, and its ratio must not be attributed",
+    "to a single unit (see lib/trials.ts findSiteTrial).",
     "-----------------------------------------------------------------------"
   ],
   "trials": [
@@ -52,27 +60,393 @@
       "operator": null,
       "siteId": null,
       "waterbodyId": null,
-      "hydrocycloneId": null,
+      "hydrocycloneIds": [
+        "10mm"
+      ],
       "feed": {
-        "material": "Aquarium soil",
-        "preparation": "Supplied as pellets, crushed with a pestle and mortar before use.",
-        "concentrationMgL": null,
-        "psdMeasured": false,
-        "note": "A bench feed, not a natural water. Useful for characterising the hydrocyclone itself; NOT evidence about any particular site until a natural feed is run."
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 0.5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 63.48,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
-        "poreSizeUm": null,
-        "diameterMm": null,
+        "poreSizeUm": 5,
+        "diameterMm": 47,
         "material": null
       },
-      "terminalCondition": null,
-      "volumeBeforeMl": null,
-      "volumeAfterMl": null,
-      "replicates": null,
-      "status": "awaiting-data",
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 457.333,
+      "volumeAfterMl": 1963.333,
+      "replicates": 3,
+      "status": "recorded",
       "notes": [
-        "Placeholder created from the description given. Fill in the numbers and set status to 'recorded'.",
-        "volumeRatio is deliberately NOT stored - it is computed from the two volumes, so it can never drift out of step with them."
+        "Repeat volumes (mL), baseline (no pretreatment): 468, 478, 426.",
+        "Repeat volumes (mL), after the 1st (10mm) hydrocyclone alone: 2060, 1840, 1990.",
+        "Nominal feed dose for this run: 0.5 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 460 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 7.66 / 22.8 / 72.7.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 2.15 / 3.62 / 8.12.",
+        "Mass-based separation efficiency reported for this stage in the source spreadsheet: 86.2%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
+      ]
+    },
+    {
+      "id": "oct24nov10-10mm-cascade-0p5gL",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneIds": [
+        "10mm",
+        "10mm"
+      ],
+      "feed": {
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 0.5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 18.7901,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": 5,
+        "diameterMm": 47,
+        "material": null
+      },
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 457.333,
+      "volumeAfterMl": 3696.667,
+      "replicates": 3,
+      "status": "recorded",
+      "notes": [
+        "Repeat volumes (mL), baseline (no pretreatment): 468, 478, 426.",
+        "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 3860, 3540, 3690.",
+        "Nominal feed dose for this run: 0.5 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 460 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 7.66 / 22.8 / 72.7.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 1.935 / 2.896 / 6.09.",
+        "Mass-based separation efficiency reported per stage in the source spreadsheet: 1st hydrocyclone 86.2%, 2nd hydrocyclone (on the 1st's overflow) 70.4%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
+      ]
+    },
+    {
+      "id": "oct24nov10-10mm-1gL",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneIds": [
+        "10mm"
+      ],
+      "feed": {
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 1 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 71.44,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": 5,
+        "diameterMm": 47,
+        "material": null
+      },
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 139,
+      "volumeAfterMl": 1192,
+      "replicates": 3,
+      "status": "recorded",
+      "notes": [
+        "Repeat volumes (mL), baseline (no pretreatment): 139, 142, 136.",
+        "Repeat volumes (mL), after the 1st (10mm) hydrocyclone alone: 1176, 1184, 1216.",
+        "Nominal feed dose for this run: 1 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 940 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 6.45 / 26.2 / 63.5.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 2.88 / 5.21 / 15.8.",
+        "Mass-based separation efficiency reported for this stage in the source spreadsheet: 92.4%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
+      ]
+    },
+    {
+      "id": "oct24nov10-10mm-cascade-1gL",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneIds": [
+        "10mm",
+        "10mm"
+      ],
+      "feed": {
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 1 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 19.646,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": 5,
+        "diameterMm": 47,
+        "material": null
+      },
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 139,
+      "volumeAfterMl": 2082.667,
+      "replicates": 3,
+      "status": "recorded",
+      "notes": [
+        "Repeat volumes (mL), baseline (no pretreatment): 139, 142, 136.",
+        "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 2120, 2040, 2088.",
+        "Nominal feed dose for this run: 1 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 940 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 6.45 / 26.2 / 63.5.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 2.592 / 3.867 / 9.87.",
+        "Mass-based separation efficiency reported per stage in the source spreadsheet: 1st hydrocyclone 92.4%, 2nd hydrocyclone (on the 1st's overflow) 72.5%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
+      ]
+    },
+    {
+      "id": "oct24nov10-10mm-2gL",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneIds": [
+        "10mm"
+      ],
+      "feed": {
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 2 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 195.3,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": 5,
+        "diameterMm": 47,
+        "material": null
+      },
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 196.333,
+      "volumeAfterMl": 903.333,
+      "replicates": 3,
+      "status": "recorded",
+      "notes": [
+        "Repeat volumes (mL), baseline (no pretreatment): 198, 206, 185.",
+        "Repeat volumes (mL), after the 1st (10mm) hydrocyclone alone: 886, 896, 928.",
+        "Nominal feed dose for this run: 2 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 1860 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 7.77 / 22.5 / 71.4.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 2.73 / 4.83 / 12.5.",
+        "Mass-based separation efficiency reported for this stage in the source spreadsheet: 89.5%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
+      ]
+    },
+    {
+      "id": "oct24nov10-10mm-cascade-2gL",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneIds": [
+        "10mm",
+        "10mm"
+      ],
+      "feed": {
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 2 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 47.8485,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": 5,
+        "diameterMm": 47,
+        "material": null
+      },
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 196.333,
+      "volumeAfterMl": 1618.667,
+      "replicates": 3,
+      "status": "recorded",
+      "notes": [
+        "Repeat volumes (mL), baseline (no pretreatment): 198, 206, 185.",
+        "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 1632, 1672, 1552.",
+        "Nominal feed dose for this run: 2 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 1860 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 7.77 / 22.5 / 71.4.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 2.157 / 3.864 / 8.375.",
+        "Mass-based separation efficiency reported per stage in the source spreadsheet: 1st hydrocyclone 89.5%, 2nd hydrocyclone (on the 1st's overflow) 75.5%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
+      ]
+    },
+    {
+      "id": "oct24nov10-10mm-5gL",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneIds": [
+        "10mm"
+      ],
+      "feed": {
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 903.35,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": 5,
+        "diameterMm": 47,
+        "material": null
+      },
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 196.667,
+      "volumeAfterMl": 728,
+      "replicates": 3,
+      "status": "recorded",
+      "notes": [
+        "Repeat volumes (mL), baseline (no pretreatment): 199, 193, 198.",
+        "Repeat volumes (mL), after the 1st (10mm) hydrocyclone alone: 664, 752, 768.",
+        "Nominal feed dose for this run: 5 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 4450 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 9.86 / 27.7 / 80.3.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 2.77 / 4.88 / 12.7.",
+        "Mass-based separation efficiency reported for this stage in the source spreadsheet: 79.7%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
+      ]
+    },
+    {
+      "id": "oct24nov10-10mm-cascade-5gL",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneIds": [
+        "10mm",
+        "10mm"
+      ],
+      "feed": {
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 186.9935,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": 5,
+        "diameterMm": 47,
+        "material": null
+      },
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 196.667,
+      "volumeAfterMl": 976,
+      "replicates": 3,
+      "status": "recorded",
+      "notes": [
+        "Repeat volumes (mL), baseline (no pretreatment): 199, 193, 198.",
+        "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 984, 936, 1008.",
+        "Nominal feed dose for this run: 5 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 4450 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 9.86 / 27.7 / 80.3.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 2.293 / 3.904 / 9.225.",
+        "Mass-based separation efficiency reported per stage in the source spreadsheet: 1st hydrocyclone 79.7%, 2nd hydrocyclone (on the 1st's overflow) 79.3%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
+      ]
+    },
+    {
+      "id": "oct24nov10-10mm-10gL",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneIds": [
+        "10mm"
+      ],
+      "feed": {
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 10 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 2026.44,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": 5,
+        "diameterMm": 47,
+        "material": null
+      },
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 66,
+      "volumeAfterMl": 362.667,
+      "replicates": 3,
+      "status": "recorded",
+      "notes": [
+        "Repeat volumes (mL), baseline (no pretreatment): 67, 72, 59.",
+        "Repeat volumes (mL), after the 1st (10mm) hydrocyclone alone: 384, 312, 392.",
+        "Nominal feed dose for this run: 10 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 8660 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 15.9 / 31.1 / 96.8.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 3.97 / 8.3 / 22.1.",
+        "Mass-based separation efficiency reported for this stage in the source spreadsheet: 76.6%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
+      ]
+    },
+    {
+      "id": "oct24nov10-10mm-cascade-10gL",
+      "date": null,
+      "operator": null,
+      "siteId": null,
+      "waterbodyId": null,
+      "hydrocycloneIds": [
+        "10mm",
+        "10mm"
+      ],
+      "feed": {
+        "material": "Garden/aquarium soil (crushed pellets) suspended in water",
+        "preparation": "Soil pellets crushed by hand before mixing to a nominal 10 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
+        "concentrationMgL": 350.5741,
+        "psdMeasured": true,
+        "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
+      },
+      "filter": {
+        "poreSizeUm": 5,
+        "diameterMm": 47,
+        "material": null
+      },
+      "terminalCondition": "Filtered until flow effectively stopped (dripping ceased), consistent across repeats - per operator recollection, not logged as an explicit stop-rule per individual run.",
+      "volumeBeforeMl": 66,
+      "volumeAfterMl": 477.333,
+      "replicates": 3,
+      "status": "recorded",
+      "notes": [
+        "Repeat volumes (mL), baseline (no pretreatment): 67, 72, 59.",
+        "Repeat volumes (mL), after the 1st+2nd (10mm+10mm cascade) hydrocyclones in series: 496, 448, 488.",
+        "Nominal feed dose for this run: 10 g/L soil-in-water, before any treatment.",
+        "Actual measured baseline feed concentration (dried + weighed): 8660 mg/L.",
+        "Feed PSD before any treatment (Dx20/50/90, µm): 15.9 / 31.1 / 96.8.",
+        "Feed PSD actually reaching the membrane in this run (Dx20/50/90, µm): 2.573 / 6.64 / 11.575.",
+        "Mass-based separation efficiency reported per stage in the source spreadsheet: 1st hydrocyclone 76.6%, 2nd hydrocyclone (on the 1st's overflow) 82.7%.",
+        "Filter pore size (5 µm) and disc diameter (47 mm) are the operator's best recollection - not explicitly logged per-run in the source spreadsheet. Verify before treating as certain.",
+        "Run sometime within the Oct24-Nov10 period per the lab notes folder; exact date and operator are not recorded in the spreadsheet.",
+        "Source: Uploaded lab data (Exps.zip), Oct24-Nov10/hydrocyclone + membrane.xlsx and Oct24-Nov10/Membrane only (time and process volume).xlsx; entered into this repository 2026-09-01."
       ]
     }
   ]

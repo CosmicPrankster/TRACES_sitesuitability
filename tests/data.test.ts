@@ -113,9 +113,9 @@ describe("field observations", () => {
 describe("trials", () => {
   const trials = loadTrials();
 
-  it("holds the one placeholder trial, honestly still awaiting data", () => {
-    expect(trials.length).toBe(1);
-    expect(trials[0].status).toBe("awaiting-data");
+  it("holds the 10 recorded Oct24-Nov10 bench trials", () => {
+    expect(trials.length).toBe(10);
+    expect(trials.every((t) => t.status === "recorded")).toBe(true);
   });
 
   it("has not silently filled in numbers without flipping the status", () => {
@@ -124,6 +124,42 @@ describe("trials", () => {
         expect(t.volumeBeforeMl).toBeNull();
         expect(t.volumeAfterMl).toBeNull();
       }
+    }
+  });
+
+  it("keeps every trial's feed honestly marked as a bench feed, not a natural water", () => {
+    // All 10 are crushed-soil-in-water bench trials - none are evidence
+    // about any particular site until a natural feed is run.
+    for (const t of trials) {
+      expect(t.siteId).toBeNull();
+      expect(t.feed.note).toMatch(/not a natural water/i);
+    }
+  });
+
+  it("records the 10mm-alone and 10mm+10mm cascade as distinct treatment stages", () => {
+    const single = trials.filter((t) => t.hydrocycloneIds.length === 1);
+    const cascade = trials.filter((t) => t.hydrocycloneIds.length === 2);
+    expect(single.length).toBe(5);
+    expect(cascade.length).toBe(5);
+    expect(cascade.every((t) => t.hydrocycloneIds.join() === "10mm,10mm")).toBe(true);
+  });
+
+  it("shows the cascade outperforming a single pass at every concentration", () => {
+    // Same baseline, same concentration series - the second hydrocyclone
+    // stage should only add further removal, never make things worse.
+    const pairs: [string, string][] = [
+      ["aquarium-soil-bench-001", "oct24nov10-10mm-cascade-0p5gL"],
+      ["oct24nov10-10mm-1gL", "oct24nov10-10mm-cascade-1gL"],
+      ["oct24nov10-10mm-2gL", "oct24nov10-10mm-cascade-2gL"],
+      ["oct24nov10-10mm-5gL", "oct24nov10-10mm-cascade-5gL"],
+      ["oct24nov10-10mm-10gL", "oct24nov10-10mm-cascade-10gL"],
+    ];
+    const ratio = (id: string) => {
+      const t = trials.find((x) => x.id === id)!;
+      return t.volumeAfterMl! / t.volumeBeforeMl!;
+    };
+    for (const [singleId, cascadeId] of pairs) {
+      expect(ratio(cascadeId)).toBeGreaterThan(ratio(singleId));
     }
   });
 });
@@ -202,27 +238,28 @@ describe("the validator actually rejects bad data", () => {
 
   it("catches a recorded trial with no volumes", () => {
     const h = structuredClone(good);
-    h.trials[0].status = "recorded";
-    h.trials[0].hydrocycloneId = "4mm";
-    h.trials[0].terminalCondition = "Filtered to visible cake formation.";
-    h.trials[0].feed.material = "River water";
+    // h.trials[0] is already a fully-valid recorded trial - break only the
+    // one rule under test, leaving everything else intact.
+    h.trials[0].volumeBeforeMl = null;
+    h.trials[0].volumeAfterMl = null;
     expect(problems(h)).toMatch(/positive volumeBeforeMl and volumeAfterMl/);
   });
 
   it("catches a recorded trial with no terminal condition - the field most often forgotten", () => {
     const h = structuredClone(good);
-    h.trials[0].status = "recorded";
-    h.trials[0].hydrocycloneId = "4mm";
-    h.trials[0].volumeBeforeMl = 50;
-    h.trials[0].volumeAfterMl = 75;
-    h.trials[0].filter = { poreSizeUm: 5, diameterMm: 47, material: "membrane" };
-    h.trials[0].feed.material = "River water";
+    h.trials[0].terminalCondition = null;
     expect(problems(h)).toMatch(/terminalCondition/);
+  });
+
+  it("catches a recorded trial with no hydrocycloneIds at all", () => {
+    const h = structuredClone(good);
+    h.trials[0].hydrocycloneIds = [];
+    expect(problems(h)).toMatch(/at least one hydrocycloneId/);
   });
 
   it("catches a trial referencing an unknown hydrocyclone", () => {
     const h = structuredClone(good);
-    h.trials[0].hydrocycloneId = "99mm";
+    h.trials[0].hydrocycloneIds = ["99mm"];
     expect(problems(h)).toMatch(/unknown hydrocyclone "99mm"/);
   });
 
