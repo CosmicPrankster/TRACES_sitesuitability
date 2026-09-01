@@ -260,6 +260,9 @@ function clamp(v: number, lo: number, hi: number): number {
  * ------------------------------------------------------------------
  * BLOCK 5c - what the membrane retains
  * ------------------------------------------------------------------
+ * DONE. See lib/retention.ts (`membraneRetention`, `retainedMassFraction`),
+ * tested in tests/retention.test.ts.
+ *
  * Simple: a sharp cut at the pore size, i.e. everything coarser is retained.
  * State the caveat that a real nominal-rated element passes some material
  * coarser than its rating.
