@@ -10,7 +10,7 @@ it works, not when it has been written.
 | 3 | Site + waterbody resolution | **logic done** | 18 tests; live path in probe v3 |
 | 4 | Catchment + geology → character | **logic done** | 32 tests against real NRFA + BGS records |
 | 5 | Screening engine | **in progress (5a done, 5b started)** | 5a: 17 tests. 5b so far (fitted grade-efficiency curve only, no trial override yet): 11 tests |
-| 6 | UI | not started | |
+| 6 | UI | **first screen built (Next.js, app/)** | Report screen: pass/marginal/fail grid + expandable full report. Site input is a character-select placeholder - not yet wired to live resolution (blocks 3/4) |
 | 7 | AI conversation layer | not started | |
 
 ## Probe results (run live, two sites)

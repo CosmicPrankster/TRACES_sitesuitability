@@ -1,0 +1,247 @@
+:root {
+  --bg: #fafaf9;
+  --surface: #ffffff;
+  --border: #e2e2df;
+  --text: #1c1c1a;
+  --text-muted: #63625c;
+  --accent: #2b6cb0;
+
+  --strong: #1c7c3f;
+  --strong-bg: #e3f5e9;
+  --promising: #3a8f52;
+  --promising-bg: #eef8f0;
+  --marginal: #a86a12;
+  --marginal-bg: #fdf3e3;
+  --unlikely: #a3312c;
+  --unlikely-bg: #fbeceb;
+  --insufficient: #6b6b66;
+  --insufficient-bg: #f0f0ee;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+}
+
+main {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 2rem 1.25rem 4rem;
+}
+
+.page-header h1 {
+  font-size: 1.5rem;
+  margin: 0 0 0.25rem;
+}
+
+.disclaimer {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  margin: 0 0 1.5rem;
+}
+
+.input-row {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.input-row label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.input-row select {
+  font-size: 0.95rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.window-banner {
+  border-radius: 8px;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.5rem;
+  font-size: 0.98rem;
+}
+
+.window-yes {
+  background: var(--promising-bg);
+  color: var(--strong);
+  border: 1px solid var(--strong);
+}
+
+.window-no {
+  background: var(--unlikely-bg);
+  color: var(--unlikely);
+  border: 1px solid var(--unlikely);
+}
+
+h2 {
+  font-size: 1.15rem;
+  margin: 1.75rem 0 0.25rem;
+}
+
+h3 {
+  font-size: 1rem;
+  margin: 1.25rem 0 0.4rem;
+}
+
+.hint {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  margin: 0 0 0.75rem;
+}
+
+table.grid {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+table.grid th,
+table.grid td {
+  padding: 0.35rem;
+  text-align: center;
+}
+
+table.grid thead th {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+table.grid tbody th[scope="row"] {
+  text-align: left;
+  font-weight: 600;
+  font-size: 0.9rem;
+  white-space: nowrap;
+  padding-right: 0.75rem;
+}
+
+.cell {
+  width: 100%;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.5rem 0.4rem;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  font: inherit;
+}
+
+.cell-verdict {
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.cell-ratio {
+  font-size: 0.85rem;
+}
+
+.cell-strong {
+  background: var(--strong-bg);
+  color: var(--strong);
+}
+
+.cell-promising {
+  background: var(--promising-bg);
+  color: var(--promising);
+}
+
+.cell-marginal {
+  background: var(--marginal-bg);
+  color: var(--marginal);
+}
+
+.cell-unlikely {
+  background: var(--unlikely-bg);
+  color: var(--unlikely);
+}
+
+.cell-insufficient {
+  background: var(--insufficient-bg);
+  color: var(--insufficient);
+}
+
+.cell-selected {
+  border-color: currentColor;
+}
+
+.cell-detail {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.cell-detail h3 {
+  margin-top: 0;
+}
+
+.expand-toggle {
+  margin-top: 1.5rem;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.5rem 0.9rem;
+  font: inherit;
+  color: var(--accent);
+  cursor: pointer;
+}
+
+.full-report {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1.25rem;
+  margin-top: 1rem;
+}
+
+.full-report ul {
+  margin: 0.25rem 0;
+  padding-left: 1.25rem;
+  font-size: 0.92rem;
+}
+
+.full-report li {
+  margin-bottom: 0.3rem;
+}
+
+table.config-list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.88rem;
+  margin-top: 0.5rem;
+}
+
+table.config-list th,
+table.config-list td {
+  border-bottom: 1px solid var(--border);
+  padding: 0.4rem 0.5rem;
+  text-align: left;
+}
+
+.page-footer {
+  margin-top: 2.5rem;
+  padding-top: 1rem;
+  border-top: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}

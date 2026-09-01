@@ -1,0 +1,220 @@
+"use client";
+
+import { useState } from "react";
+import type { ParticleCharacter } from "@/lib/character";
+import type { Psd } from "@/lib/psd";
+import type { AssessmentCell, Verdict } from "@/lib/assessment";
+import type { ScreeningReport } from "@/lib/report";
+
+export interface CharacterData {
+  psd: Psd;
+  matrix: AssessmentCell[];
+  report: ScreeningReport;
+}
+
+interface HydrocycloneRef {
+  id: string;
+  name: string;
+}
+
+interface MembraneRef {
+  id: string;
+  label: string;
+  poreSizeUm: number;
+}
+
+interface Props {
+  hydrocyclones: HydrocycloneRef[];
+  membranes: MembraneRef[];
+  byCharacter: Record<ParticleCharacter, CharacterData>;
+}
+
+const CHARACTER_LABELS: Record<ParticleCharacter, string> = {
+  sand: "Sand",
+  mixed_mineral: "Mixed mineral",
+  silt: "Silt",
+  clay: "Clay",
+};
+
+const VERDICT_STYLE: Record<Verdict, { label: string; className: string }> = {
+  strong: { label: "Works well", className: "cell-strong" },
+  promising: { label: "Works", className: "cell-promising" },
+  marginal: { label: "Marginal", className: "cell-marginal" },
+  unlikely: { label: "Won't work", className: "cell-unlikely" },
+  "insufficient-data": { label: "No data", className: "cell-insufficient" },
+};
+
+export default function ReportView({ hydrocyclones, membranes, byCharacter }: Props) {
+  const [character, setCharacter] = useState<ParticleCharacter>("sand");
+  const [expanded, setExpanded] = useState(false);
+  const [selectedCell, setSelectedCell] = useState<AssessmentCell | null>(null);
+
+  const { matrix, report } = byCharacter[character];
+  const cellFor = (hydrocycloneId: string, membraneId: string) =>
+    matrix.find((c) => c.hydrocycloneId === hydrocycloneId && c.membraneId === membraneId)!;
+
+  return (
+    <main>
+      <header className="page-header">
+        <h1>Hydrocyclone + membrane screening</h1>
+        <p className="disclaimer">
+          Preliminary engineering screening only - not process design, equipment selection, or a
+          guarantee of membrane performance.
+        </p>
+      </header>
+
+      <section className="input-row">
+        <label htmlFor="character-select">
+          <strong>Site input</strong> - placeholder for the full site + waterbody lookup (not wired
+          into this screen yet). Assumed solids character:
+        </label>
+        <select
+          id="character-select"
+          value={character}
+          onChange={(e) => {
+            setCharacter(e.target.value as ParticleCharacter);
+            setSelectedCell(null);
+          }}
+        >
+          {(Object.keys(CHARACTER_LABELS) as ParticleCharacter[]).map((c) => (
+            <option key={c} value={c}>
+              {CHARACTER_LABELS[c]}
+            </option>
+          ))}
+        </select>
+      </section>
+
+      <section className={`window-banner ${report.usefulWindow ? "window-yes" : "window-no"}`}>
+        {report.usefulWindow ? (
+          <>
+            <strong>Worth investigating:</strong> membrane ratings from{" "}
+            {report.usefulWindow.fromPoreSizeUm} to {report.usefulWindow.toPoreSizeUm} µm.
+          </>
+        ) : (
+          <>
+            <strong>Not worth investigating yet</strong> at any membrane rating tested for this
+            solids character.
+          </>
+        )}
+      </section>
+
+      <section>
+        <h2>Which configurations work</h2>
+        <p className="hint">Click a cell for the full reason behind that verdict.</p>
+        <table className="grid">
+          <thead>
+            <tr>
+              <th scope="col">Hydrocyclone</th>
+              {membranes.map((m) => (
+                <th scope="col" key={m.id}>
+                  {m.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {hydrocyclones.map((h) => (
+              <tr key={h.id}>
+                <th scope="row">{h.name}</th>
+                {membranes.map((m) => {
+                  const cell = cellFor(h.id, m.id);
+                  const style = VERDICT_STYLE[cell.verdict];
+                  const isSelected =
+                    selectedCell?.hydrocycloneId === h.id && selectedCell?.membraneId === m.id;
+                  return (
+                    <td key={m.id}>
+                      <button
+                        type="button"
+                        className={`cell ${style.className} ${isSelected ? "cell-selected" : ""}`}
+                        onClick={() => setSelectedCell(isSelected ? null : cell)}
+                      >
+                        <span className="cell-verdict">{style.label}</span>
+                        <span className="cell-ratio">
+                          {Number.isFinite(cell.volumeRatio) ? `${cell.volumeRatio.toFixed(2)}x` : "-"}
+                        </span>
+                      </button>
+                    </td>
+                  );
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      {selectedCell && (
+        <section className="cell-detail">
+          <h3>
+            {hydrocyclones.find((h) => h.id === selectedCell.hydrocycloneId)?.name} +{" "}
+            {membranes.find((m) => m.id === selectedCell.membraneId)?.label}
+          </h3>
+          <p>{selectedCell.reasoning}</p>
+        </section>
+      )}
+
+      <section>
+        <button type="button" className="expand-toggle" onClick={() => setExpanded(!expanded)}>
+          {expanded ? "Hide full report ▲" : "Show full report ▼"}
+        </button>
+      </section>
+
+      {expanded && (
+        <section className="full-report">
+          <h2>Full report</h2>
+
+          <h3>Verdict</h3>
+          <p>{report.verdict}</p>
+
+          <h3>Why</h3>
+          <p>{report.why}</p>
+
+          <h3>What we know</h3>
+          <ul>
+            {report.whatWeKnow.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+
+          <h3>What we don&apos;t know</h3>
+          <ul>
+            {report.whatWeDontKnow.map((line, i) => (
+              <li key={i}>{line}</li>
+            ))}
+          </ul>
+
+          <h3>Recommended test</h3>
+          <p>{report.recommendedTest}</p>
+
+          <h3>Every configuration tested</h3>
+          <table className="config-list">
+            <thead>
+              <tr>
+                <th>Hydrocyclone</th>
+                <th>Membrane</th>
+                <th>Verdict</th>
+                <th>Volume ratio</th>
+                <th>Confidence</th>
+              </tr>
+            </thead>
+            <tbody>
+              {report.configurations.map((c, i) => (
+                <tr key={i}>
+                  <td>{hydrocyclones.find((h) => h.id === c.hydrocycloneId)?.name}</td>
+                  <td>{membranes.find((m) => m.id === c.membraneId)?.label}</td>
+                  <td>{VERDICT_STYLE[c.verdict].label}</td>
+                  <td>{Number.isFinite(c.volumeRatio) ? `${c.volumeRatio.toFixed(2)}x` : "-"}</td>
+                  <td>{c.confidence}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </section>
+      )}
+
+      <footer className="page-footer">
+        Do not enter confidential or commercially sensitive information. Runs are logged to this
+        repository.
+      </footer>
+    </main>
+  );
+}
