@@ -4,6 +4,7 @@ import {
   loadHydrocyclones,
   loadMembranes,
   loadQueryLog,
+  loadTrials,
   logKey,
   validateData,
   validate,
@@ -109,6 +110,24 @@ describe("field observations", () => {
   });
 });
 
+describe("trials", () => {
+  const trials = loadTrials();
+
+  it("holds the one placeholder trial, honestly still awaiting data", () => {
+    expect(trials.length).toBe(1);
+    expect(trials[0].status).toBe("awaiting-data");
+  });
+
+  it("has not silently filled in numbers without flipping the status", () => {
+    for (const t of trials) {
+      if (t.status === "awaiting-data") {
+        expect(t.volumeBeforeMl).toBeNull();
+        expect(t.volumeAfterMl).toBeNull();
+      }
+    }
+  });
+});
+
 describe("query log", () => {
   it("starts empty", () => {
     expect(loadQueryLog()).toEqual([]);
@@ -179,6 +198,38 @@ describe("the validator actually rejects bad data", () => {
     };
     h.log = [entry, structuredClone(entry)];
     expect(problems(h)).toMatch(/duplicate site \+ waterbody/);
+  });
+
+  it("catches a recorded trial with no volumes", () => {
+    const h = structuredClone(good);
+    h.trials[0].status = "recorded";
+    h.trials[0].hydrocycloneId = "4mm";
+    h.trials[0].terminalCondition = "Filtered to visible cake formation.";
+    h.trials[0].feed.material = "River water";
+    expect(problems(h)).toMatch(/positive volumeBeforeMl and volumeAfterMl/);
+  });
+
+  it("catches a recorded trial with no terminal condition - the field most often forgotten", () => {
+    const h = structuredClone(good);
+    h.trials[0].status = "recorded";
+    h.trials[0].hydrocycloneId = "4mm";
+    h.trials[0].volumeBeforeMl = 50;
+    h.trials[0].volumeAfterMl = 75;
+    h.trials[0].filter = { poreSizeUm: 5, diameterMm: 47, material: "membrane" };
+    h.trials[0].feed.material = "River water";
+    expect(problems(h)).toMatch(/terminalCondition/);
+  });
+
+  it("catches a trial referencing an unknown hydrocyclone", () => {
+    const h = structuredClone(good);
+    h.trials[0].hydrocycloneId = "99mm";
+    expect(problems(h)).toMatch(/unknown hydrocyclone "99mm"/);
+  });
+
+  it("catches a duplicate trial id", () => {
+    const h = structuredClone(good);
+    h.trials.push(structuredClone(h.trials[0]));
+    expect(problems(h)).toMatch(/duplicate id/);
   });
 
   it("accepts the real data unchanged", () => {

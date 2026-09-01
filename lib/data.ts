@@ -82,6 +82,36 @@ export interface FieldObservation {
   evidenceRef: string | null;
 }
 
+export type TrialStatus = "awaiting-data" | "recorded";
+
+export interface Trial {
+  id: string;
+  date: string | null;
+  operator: string | null;
+  siteId: string | null;
+  waterbodyId: string | null;
+  hydrocycloneId: string | null;
+  feed: {
+    material: string | null;
+    preparation: string | null;
+    concentrationMgL: number | null;
+    psdMeasured: boolean;
+    note: string;
+  };
+  filter: {
+    poreSizeUm: number | null;
+    diameterMm: number | null;
+    material: string | null;
+  };
+  /** How the run was decided to be over. The field most often forgotten. */
+  terminalCondition: string | null;
+  volumeBeforeMl: number | null;
+  volumeAfterMl: number | null;
+  replicates: number | null;
+  status: TrialStatus;
+  notes: string[];
+}
+
 export interface QueryLogEntry {
   siteId: string;
   waterbodyId: string;
@@ -109,6 +139,10 @@ export function loadFieldObservations(): FieldObservation[] {
   return readJson<{ observations: FieldObservation[] }>("field-observations.json").observations;
 }
 
+export function loadTrials(): Trial[] {
+  return readJson<{ trials: Trial[] }>("trials.json").trials;
+}
+
 export function loadQueryLog(): QueryLogEntry[] {
   return readJson<{ entries: QueryLogEntry[] }>("query-log.json").entries;
 }
@@ -130,15 +164,17 @@ export interface DataSet {
   hydrocyclones: Hydrocyclone[];
   membranes: Membrane[];
   observations: FieldObservation[];
+  trials: Trial[];
   log: QueryLogEntry[];
 }
 
-/** Reads all four files from disk. */
+/** Reads all five files from disk. */
 export function loadAll(): DataSet {
   return {
     hydrocyclones: loadHydrocyclones(),
     membranes: loadMembranes(),
     observations: loadFieldObservations(),
+    trials: loadTrials(),
     log: loadQueryLog(),
   };
 }
@@ -226,6 +262,39 @@ export function validate(data: DataSet): ValidationIssue[] {
     }
     for (const id of o.membraneIds ?? []) {
       if (!membraneIds.has(id)) add("field-observations", o.id, `references unknown membrane "${id}"`);
+    }
+  }
+
+  /* --- trials --- */
+  const trialIds = new Set<string>();
+  for (const t of data.trials) {
+    if (trialIds.has(t.id)) add("trials", t.id, "duplicate id");
+    trialIds.add(t.id);
+
+    if (!["awaiting-data", "recorded"].includes(t.status)) {
+      add("trials", t.id, "status must be awaiting-data | recorded");
+    }
+    if (t.hydrocycloneId && !cycloneIds.has(t.hydrocycloneId)) {
+      add("trials", t.id, `references unknown hydrocyclone "${t.hydrocycloneId}"`);
+    }
+
+    // A trial marked recorded is claiming to be usable evidence - enforce
+    // that everything needed to actually use it is present, especially the
+    // field most often forgotten: how the run was decided to be over.
+    if (t.status === "recorded") {
+      if (!t.hydrocycloneId) add("trials", t.id, "recorded trial must reference a hydrocycloneId");
+      if (!(t.volumeBeforeMl! > 0) || !(t.volumeAfterMl! > 0)) {
+        add("trials", t.id, "recorded trial must have positive volumeBeforeMl and volumeAfterMl");
+      }
+      if (!(t.filter?.poreSizeUm! > 0) || !(t.filter?.diameterMm! > 0)) {
+        add("trials", t.id, "recorded trial must have a positive filter poreSizeUm and diameterMm");
+      }
+      if (!t.terminalCondition?.trim()) {
+        add("trials", t.id, "recorded trial must state terminalCondition - how the run was stopped");
+      }
+      if (!t.feed?.material?.trim()) {
+        add("trials", t.id, "recorded trial must state feed.material");
+      }
     }
   }
 
