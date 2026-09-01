@@ -274,6 +274,10 @@ function clamp(v: number, lo: number, hi: number): number {
  * ------------------------------------------------------------------
  * BLOCK 5d - the assessment. THE IMPORTANT ONE.
  * ------------------------------------------------------------------
+ * DONE. See lib/assessment.ts (`assessPair`, `assessMatrix`), tested in
+ * tests/assessment.test.ts. The marginal/promising/strong thresholds now
+ * live in data/screening-parameters.json's volumeTargets, not in code.
+ *
  * The question is NOT "does the cyclone remove solids". It always removes
  * some. The question is:
  *

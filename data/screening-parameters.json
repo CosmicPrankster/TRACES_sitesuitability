@@ -26,9 +26,10 @@
     "-----------------------------------------------------------------------"
   ],
   "volumeTargets": {
+    "marginalVolumeRatio": 1.2,
     "promisingVolumeRatio": 1.5,
     "strongVolumeRatio": 2.0,
-    "note": "Set by the user: 'promising' means the agent can reason to roughly 150 % of the untreated filterable volume."
+    "note": "Set by the user: 'promising' means the agent can reason to roughly 150 % of the untreated filterable volume. Below marginalVolumeRatio the verdict is 'unlikely'; between marginal and promising it is 'marginal'; at or above strongVolumeRatio it is 'strong'."
   },
   "cakeResistanceExponent": {
     "value": 2,
