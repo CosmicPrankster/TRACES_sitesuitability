@@ -21,9 +21,18 @@ import { isCrystallineBedrock, parseBgsFeatureInfo, readLithology, summariseGeol
  * instead of being re-implemented ad hoc. Server-only: uses fetch against
  * Nominatim, NRFA and BGS directly, so this must never run in the browser.
  *
- * Every failure is a distinct, named state - never a silent default. If
- * geocoding fails, or nothing on NRFA matches, or BGS has nothing at the
- * point, that is reported as exactly that, not smoothed over into a guess.
+ * Split into two steps on purpose - HANDOFF.md is explicit that the wrong
+ * reach is the worst silent failure available, so the match must be shown
+ * back to the user and CONFIRMED before any screening happens on it:
+ *
+ *   matchSite(query)      cheap: geocode + NRFA name/place match. Returns a
+ *                         Resolution (candidates + confidence), never
+ *                         auto-picks one.
+ *   screenStation(station) expensive: the full NRFA record + BGS geology +
+ *                          character inference, for a station the caller
+ *                          (the UI, after the user confirms) has chosen.
+ *
+ * Every failure is a distinct, named state - never a silent default.
  */
 
 const TIMEOUT_MS = 20000;
@@ -112,33 +121,25 @@ async function fetchBgsLayer(layer: string, easting: number, northing: number) {
   return xml ? parseBgsFeatureInfo(xml) : null;
 }
 
-export type SiteResolutionFailure =
-  | { ok: false; stage: "geocode"; message: string }
-  | { ok: false; stage: "nrfa-list"; message: string }
-  | { ok: false; stage: "no-match"; message: string; resolution: Resolution };
+/* ------------------------------------------------------------------ */
+/* Step 1: match - cheap, never commits to a station                   */
+/* ------------------------------------------------------------------ */
 
-export interface SiteResolutionSuccess {
+export type SiteMatchFailure =
+  | { ok: false; stage: "geocode"; message: string }
+  | { ok: false; stage: "nrfa-list"; message: string };
+
+export interface SiteMatchSuccess {
   ok: true;
   geocode: GeocodeResult;
+  /** Carries .candidates, .confidence, .needsConfirmation - nothing is auto-picked. */
   resolution: Resolution;
-  station: NrfaStation;
-  catchment: CatchmentProperties;
-  geologyStatement: string | null;
-  characterInference: CharacterInference;
 }
 
-export type SiteResolutionResult = SiteResolutionSuccess | SiteResolutionFailure;
+export type SiteMatchResult = SiteMatchSuccess | SiteMatchFailure;
 
-/**
- * The full live pipeline: parse the query, geocode a settlement anchor,
- * match it against NRFA gauging stations, pull the full catchment record,
- * corroborate with BGS geology at the point, and infer solids character.
- *
- * Mirrors scripts/probe.mjs exactly, but calls the tested library functions
- * (parseQuery/rankStations/decideResolution/fromNrfaRecord/inferCharacter)
- * instead of re-deriving the logic.
- */
-export async function resolveSite(query: string): Promise<SiteResolutionResult> {
+/** Geocodes and name-matches against NRFA. Returns candidates for the user to confirm - picks nothing. */
+export async function matchSite(query: string): Promise<SiteMatchResult> {
   const parsed = parseQuery(query);
   const candidates = [parsed.settlement, parsed.waterbody, ...(parsed.anchorCandidates ?? []), query].filter(
     (v): v is string => Boolean(v),
@@ -161,23 +162,34 @@ export async function resolveSite(query: string): Promise<SiteResolutionResult> 
 
   const matches = rankStations(parsed, stations, 5, bng);
   const resolution = decideResolution(parsed, matches);
-  const top = matches[0];
-  if (!top || resolution.confidence === "none" || resolution.confidence === "ambiguous") {
-    return {
-      ok: false,
-      stage: "no-match",
-      message: resolution.statement,
-      resolution,
-    };
-  }
+  return { ok: true, geocode, resolution };
+}
 
+/* ------------------------------------------------------------------ */
+/* Step 2: screen - only once the user has confirmed a specific station */
+/* ------------------------------------------------------------------ */
+
+export type StationScreenFailure = { ok: false; stage: "no-inference"; message: string };
+
+export interface StationScreenSuccess {
+  ok: true;
+  station: NrfaStation;
+  catchment: CatchmentProperties;
+  geologyStatement: string | null;
+  characterInference: CharacterInference;
+}
+
+export type StationScreenResult = StationScreenSuccess | StationScreenFailure;
+
+/** Full catchment record + BGS geology + character inference for a CONFIRMED station. */
+export async function screenStation(station: NrfaStation): Promise<StationScreenResult> {
   const [fullRecord, bedrock, superficial] = await Promise.all([
-    fetchNrfaFullRecord(top.station.id),
-    fetchBgsLayer("BGS.50k.Bedrock", top.station.easting, top.station.northing),
-    fetchBgsLayer("BGS.50k.Superficial.deposits", top.station.easting, top.station.northing),
+    fetchNrfaFullRecord(station.id),
+    fetchBgsLayer("BGS.50k.Bedrock", station.easting, station.northing),
+    fetchBgsLayer("BGS.50k.Superficial.deposits", station.easting, station.northing),
   ]);
 
-  const catchment = fromNrfaRecord(fullRecord ?? { id: top.station.id, name: top.station.name });
+  const catchment = fromNrfaRecord(fullRecord ?? { id: station.id, name: station.name });
   const geologySummary = bedrock || superficial ? summariseGeology({ bedrock, superficial }) : null;
 
   let corroboration: GeologyCorroboration | undefined;
@@ -195,19 +207,10 @@ export async function resolveSite(query: string): Promise<SiteResolutionResult> 
   if (!characterInference) {
     return {
       ok: false,
-      stage: "no-match",
-      message: `${top.station.name} matched, but NRFA has too little catchment data recorded to infer anything.`,
-      resolution,
+      stage: "no-inference",
+      message: `${station.name} matched, but NRFA has too little catchment data recorded to infer anything.`,
     };
   }
 
-  return {
-    ok: true,
-    geocode,
-    resolution,
-    station: top.station,
-    catchment,
-    geologyStatement: geologySummary?.statement ?? null,
-    characterInference,
-  };
+  return { ok: true, station, catchment, geologyStatement: geologySummary?.statement ?? null, characterInference };
 }

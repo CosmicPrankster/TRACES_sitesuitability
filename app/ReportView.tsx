@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { ParticleCharacter, CharacterInference } from "@/lib/character";
-import type { Resolution } from "@/lib/resolve";
+import type { Resolution, StationMatch } from "@/lib/resolve";
 import type { Psd } from "@/lib/psd";
 import type { AssessmentCell, Verdict } from "@/lib/assessment";
 import type { ScreeningReport } from "@/lib/report";
@@ -30,10 +30,7 @@ interface Props {
   byCharacter: Record<ParticleCharacter, CharacterData>;
 }
 
-interface LiveSuccess {
-  ok: true;
-  geocode: { displayName: string; matchedOn: string };
-  resolution: Resolution;
+interface Screened {
   station: { id: number; name: string; "catchment-area"?: number };
   geologyStatement: string | null;
   characterInference: CharacterInference;
@@ -42,13 +39,20 @@ interface LiveSuccess {
   report: ScreeningReport;
 }
 
-interface LiveFailure {
-  ok: false;
-  stage: "input" | "geocode" | "nrfa-list" | "no-match";
-  message: string;
-}
-
-type LiveState = { kind: "idle" } | { kind: "loading" } | ({ kind: "done" } & (LiveSuccess | LiveFailure));
+/**
+ * The site-input flow is two confirmed steps, never one silent one.
+ * HANDOFF.md: "the wrong reach is the worst silent failure available" - so
+ * a match is proposed and shown, never auto-accepted, before any screening
+ * runs on it.
+ */
+type FlowState =
+  | { phase: "idle" }
+  | { phase: "matching" }
+  | { phase: "match-failed"; stage: string; message: string }
+  | { phase: "confirm"; matchedOn: string; resolution: Resolution }
+  | { phase: "screening"; stationName: string }
+  | { phase: "screen-failed"; message: string }
+  | ({ phase: "screened" } & Screened);
 
 const CHARACTER_LABELS: Record<ParticleCharacter, string> = {
   sand: "Sand",
@@ -67,27 +71,60 @@ const VERDICT_STYLE: Record<Verdict, { label: string; className: string }> = {
 
 export default function ReportView({ hydrocyclones, membranes, byCharacter }: Props) {
   const [query, setQuery] = useState("");
-  const [live, setLive] = useState<LiveState>({ kind: "idle" });
+  const [flow, setFlow] = useState<FlowState>({ phase: "idle" });
   const [character, setCharacter] = useState<ParticleCharacter>("sand");
   const [expanded, setExpanded] = useState(false);
   const [selectedCell, setSelectedCell] = useState<AssessmentCell | null>(null);
 
-  const liveOk = live.kind === "done" && live.ok ? live : null;
-  const { matrix, report } = liveOk ?? byCharacter[character];
+  const live = flow.phase === "screened" ? flow : null;
+  const { matrix, report } = live ?? byCharacter[character];
 
   const cellFor = (hydrocycloneId: string, membraneId: string) =>
     matrix.find((c) => c.hydrocycloneId === hydrocycloneId && c.membraneId === membraneId)!;
 
   async function lookUp() {
     if (!query.trim()) return;
-    setLive({ kind: "loading" });
+    setFlow({ phase: "matching" });
     setSelectedCell(null);
     try {
-      const res = await fetch(`/api/screen?q=${encodeURIComponent(query)}`);
+      const res = await fetch(`/api/resolve?q=${encodeURIComponent(query)}`);
       const data = await res.json();
-      setLive({ kind: "done", ...data });
+      if (!data.ok) {
+        setFlow({ phase: "match-failed", stage: data.stage, message: data.message });
+        return;
+      }
+      if (data.resolution.confidence === "none" || data.resolution.candidates.length === 0) {
+        setFlow({ phase: "match-failed", stage: "no-match", message: data.resolution.statement });
+        return;
+      }
+      setFlow({ phase: "confirm", matchedOn: data.geocode.matchedOn, resolution: data.resolution });
     } catch {
-      setLive({ kind: "done", ok: false, stage: "geocode", message: "Request failed - the server did not respond." });
+      setFlow({ phase: "match-failed", stage: "network", message: "Request failed - the server did not respond." });
+    }
+  }
+
+  async function confirmStation(candidate: StationMatch) {
+    setFlow({ phase: "screening", stationName: candidate.station.name });
+    setSelectedCell(null);
+    try {
+      const s = candidate.station;
+      const qs = new URLSearchParams({
+        id: String(s.id),
+        name: s.name,
+        river: s.river ?? "",
+        easting: String(s.easting),
+        northing: String(s.northing),
+        catchmentArea: s["catchment-area"] != null ? String(s["catchment-area"]) : "",
+      });
+      const res = await fetch(`/api/screen?${qs}`);
+      const data = await res.json();
+      if (!data.ok) {
+        setFlow({ phase: "screen-failed", message: data.message });
+        return;
+      }
+      setFlow({ phase: "screened", ...data });
+    } catch {
+      setFlow({ phase: "screen-failed", message: "Request failed - the server did not respond." });
     }
   }
 
@@ -104,7 +141,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
       <section className="input-row">
         <label htmlFor="site-input">
           <strong>Site input</strong> - e.g. &quot;Tilford, River Wey&quot;. Resolves live via
-          Nominatim + NRFA + BGS.
+          Nominatim + NRFA. You confirm the match before anything is screened.
         </label>
         <div className="site-input-row">
           <input
@@ -115,31 +152,58 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && lookUp()}
           />
-          <button type="button" onClick={lookUp} disabled={live.kind === "loading"}>
-            {live.kind === "loading" ? "Looking up..." : "Look up"}
+          <button type="button" onClick={lookUp} disabled={flow.phase === "matching"}>
+            {flow.phase === "matching" ? "Looking up..." : "Look up"}
           </button>
         </div>
       </section>
 
-      {live.kind === "done" && !live.ok && (
+      {flow.phase === "match-failed" && (
         <section className="live-status live-error">
-          <strong>Could not resolve that site ({live.stage}):</strong> {live.message}
+          <strong>Could not resolve that site ({flow.stage}):</strong> {flow.message}
         </section>
       )}
 
-      {liveOk && (
+      {flow.phase === "confirm" && (
+        <section className="live-status live-confirm">
+          <p>{flow.resolution.statement}</p>
+          <ul className="candidate-list">
+            {flow.resolution.candidates.map((c) => (
+              <li key={c.station.id}>
+                <button type="button" className="candidate-button" onClick={() => confirmStation(c)}>
+                  Confirm: {c.station.name}
+                  {c.station["catchment-area"] ? ` (${c.station["catchment-area"]} km²)` : ""}
+                  {c.distanceKm !== undefined ? ` - ${c.distanceKm.toFixed(1)} km from "${flow.matchedOn}"` : ""}
+                </button>
+                <span className="candidate-reason">{c.reason}</span>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
+      {flow.phase === "screening" && (
+        <section className="live-status live-pending">Screening {flow.stationName}...</section>
+      )}
+
+      {flow.phase === "screen-failed" && (
+        <section className="live-status live-error">
+          <strong>Matched, but could not screen it:</strong> {flow.message}
+        </section>
+      )}
+
+      {live && (
         <section className="live-status live-ok">
           <p>
-            <strong>Resolved:</strong> {liveOk.station.name} - NRFA gauging station {liveOk.station.id}
-            {liveOk.station["catchment-area"] ? `, catchment area ${liveOk.station["catchment-area"]} km²` : ""}.
-            Anchored on &quot;{liveOk.geocode.matchedOn}&quot; ({liveOk.geocode.displayName}).
+            <strong>Screening:</strong> {live.station.name} - NRFA gauging station {live.station.id}
+            {live.station["catchment-area"] ? `, catchment area ${live.station["catchment-area"]} km²` : ""}.
           </p>
           <p>
-            <strong>Inferred character:</strong> {CHARACTER_LABELS[liveOk.characterInference.character]}{" "}
-            (confidence: {liveOk.characterInference.confidence})
+            <strong>Inferred character:</strong> {CHARACTER_LABELS[live.characterInference.character]}{" "}
+            (confidence: {live.characterInference.confidence})
           </p>
           <ul>
-            {liveOk.characterInference.reasoning.map((line, i) => (
+            {live.characterInference.reasoning.map((line, i) => (
               <li key={i}>{line}</li>
             ))}
           </ul>
@@ -148,10 +212,10 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
 
       <section className="input-row">
         <label htmlFor="character-select">
-          {liveOk ? (
+          {live ? (
             <>Or override with an assumed solids character instead of the resolved site:</>
           ) : (
-            <>No site resolved yet - screen against an assumed solids character:</>
+            <>No site confirmed yet - screen against an assumed solids character:</>
           )}
         </label>
         <select
@@ -160,7 +224,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
           onChange={(e) => {
             setCharacter(e.target.value as ParticleCharacter);
             setSelectedCell(null);
-            setLive({ kind: "idle" });
+            setFlow({ phase: "idle" });
           }}
         >
           {(Object.keys(CHARACTER_LABELS) as ParticleCharacter[]).map((c) => (
