@@ -325,6 +325,11 @@ function clamp(v: number, lo: number, hi: number): number {
  * ------------------------------------------------------------------
  * BLOCK 5e - the report
  * ------------------------------------------------------------------
+ * DONE. See lib/report.ts (`buildReport`, `findUsefulWindow`, `groupCells`),
+ * tested in tests/report.test.ts. Blocks 5a-5e are now all built: a full
+ * screening report can be produced end to end from a solids character
+ * alone, with no site measurement or trial required.
+ *
  * Group the cells into best / marginal / unlikely / insufficient-data, and
  * find the USEFUL WINDOW: the contiguous band of membrane ratings where
  * pre-treatment looks worthwhile. That window is the single most valuable
