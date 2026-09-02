@@ -35,9 +35,18 @@ it works, not when it has been written.
 | BGS REST `identify` | 6 variants, inc. BNG coords, explicit layer ids, wide extents | Always `results: []`. Superseded by WMS. |
 | SEPA river levels | 2 hosts | `ENOTFOUND`. |
 | Open-Meteo geocoding | every query | 0 items — a settlement gazetteer, holds no river names. |
+| EA WFD river water body catchments | 3 guessed ArcGIS REST paths | 200 OK, but `{"error":{"code":400,"message":"Invalid URL"}}` every time — the ArcGIS backend at `environment.data.gov.uk/arcgis/rest/services` is real, the exact service name isn't. Needs manual discovery via their catalogue UI, not blind guessing. |
+| MAGIC (DEFRA) land cover WMS | 2 hosts (`magic.defra.gov.uk`, `environment.data.gov.uk/arcgis/services/MAGIC/...`) | Timeout / 404. Old domain likely decommissioned. |
+| SEPA open data (catchments) | 2 hosts | Connection failed both times — consistent with the SEPA river-levels failure above. |
+| DataMapWales WFS | 1 host | Timeout. |
 
 Nothing is retried hopefully. A source that failed on both sites is gone, and
-the model is smaller for it.
+the model is smaller for it. The four small-catchment candidates above were
+probed (`scripts/probe-small-catchments.mjs`) as a way to give an ungauged
+site more than a single geocoded point; none proved out, so the fallback for
+those sites stays what it is - BGS geology at the anchor point alone, low
+confidence, honestly labelled as a point reading (see
+`lib/character.ts`'s `inferCharacterFromGeologyOnly`).
 
 ### Two findings that mattered more than the pass/fail list
 

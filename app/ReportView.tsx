@@ -35,6 +35,8 @@ interface Screened {
   station?: { id: number; name: string; "catchment-area"?: number };
   /** Set when there was no NRFA gauge nearby - see lib/live-site.ts's screenPointGeology. */
   source?: "geology-only";
+  /** The geocoded anchor, present for the geology-only path - it is the actual point read. */
+  geocode?: { displayName: string; matchedOn: string };
   geologyStatement: string | null;
   characterInference: CharacterInference;
   psd: Psd;
@@ -100,6 +102,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
         setFlow({
           phase: "screened",
           source: "geology-only",
+          geocode: data.geocode,
           geologyStatement: data.geologyStatement,
           characterInference: data.characterInference,
           psd: data.psd,
@@ -209,6 +212,14 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
             <strong>No NRFA gauge nearby</strong> - normal for a small or urban watercourse. Reading
             from the mapped geology at this point only, not a catchment-wide inference.
           </p>
+          {live.geocode && (
+            <p>
+              <strong>Anchor point:</strong> &quot;{live.geocode.matchedOn}&quot; ({live.geocode.displayName}).
+              For a small watercourse this is often the nearest settlement, not the water itself -
+              if it runs some distance from that point, the geology there may differ from what is
+              mapped here. Treat this reading as a rough starting point, not the site itself confirmed.
+            </p>
+          )}
         </section>
       )}
 
