@@ -166,6 +166,13 @@ main {
   margin: 0.15rem 0 0 0.75rem;
 }
 
+.candidate-none {
+  margin-top: 0.5rem;
+  font-weight: 500;
+  border-style: dashed;
+  color: var(--text-muted);
+}
+
 .input-row select {
   font-size: 0.95rem;
   padding: 0.35rem 0.5rem;

@@ -54,7 +54,14 @@ type FlowState =
   | { phase: "idle" }
   | { phase: "matching" }
   | { phase: "match-failed"; stage: string; message: string }
-  | { phase: "confirm"; matchedOn: string; resolution: Resolution }
+  | {
+      phase: "confirm";
+      matchedOn: string;
+      resolution: Resolution;
+      /** The point already geocoded - what "None of these" needs to fall back to geology alone. */
+      bng: { easting: number; northing: number };
+      displayName: string;
+    }
   | { phase: "screening"; stationName: string }
   | { phase: "screen-failed"; message: string }
   | ({ phase: "screened" } & Screened);
@@ -111,7 +118,13 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
         });
         return;
       }
-      setFlow({ phase: "confirm", matchedOn: data.geocode.matchedOn, resolution: data.resolution });
+      setFlow({
+        phase: "confirm",
+        matchedOn: data.geocode.matchedOn,
+        resolution: data.resolution,
+        bng: data.bng,
+        displayName: data.geocode.displayName,
+      });
     } catch {
       setFlow({ phase: "match-failed", stage: "network", message: "Request failed - the server did not respond." });
     }
@@ -129,6 +142,35 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
         easting: String(s.easting),
         northing: String(s.northing),
         catchmentArea: s["catchment-area"] != null ? String(s["catchment-area"]) : "",
+      });
+      const res = await fetch(`/api/screen?${qs}`);
+      const data = await res.json();
+      if (!data.ok) {
+        setFlow({ phase: "screen-failed", message: data.message });
+        return;
+      }
+      setFlow({ phase: "screened", ...data });
+    } catch {
+      setFlow({ phase: "screen-failed", message: "Request failed - the server did not respond." });
+    }
+  }
+
+  /**
+   * The opt-out decideResolution's own message promises ("or say so and the
+   * geology will be read straight from the map") but that, until now, had no
+   * button behind it - see BUILD.md. Used both when none of the candidates
+   * are the intended site, and when there were no candidates to begin with.
+   */
+  async function confirmGeologyOnly(bng: { easting: number; northing: number }, matchedOn: string, displayName: string) {
+    setFlow({ phase: "screening", stationName: "the mapped point" });
+    setSelectedCell(null);
+    try {
+      const qs = new URLSearchParams({
+        mode: "geology-only",
+        easting: String(bng.easting),
+        northing: String(bng.northing),
+        matchedOn,
+        displayName,
       });
       const res = await fetch(`/api/screen?${qs}`);
       const data = await res.json();
@@ -195,6 +237,13 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
               </li>
             ))}
           </ul>
+          <button
+            type="button"
+            className="candidate-button candidate-none"
+            onClick={() => confirmGeologyOnly(flow.bng, flow.matchedOn, flow.displayName)}
+          >
+            None of these - read geology at this point instead
+          </button>
         </section>
       )}
 
