@@ -3,17 +3,17 @@ import { loadHydrocyclones } from "@/lib/data";
 import { fitSharpness, gradeEfficiency, gradeEfficiencyCurve } from "@/lib/separation";
 
 const cyclones = loadHydrocyclones();
-const fourMm = cyclones.find((h) => h.id === "4mm")!;
+const fiveMm = cyclones.find((h) => h.id === "5mm")!;
 const tenMm = cyclones.find((h) => h.id === "10mm")!;
 
 describe("fitSharpness", () => {
   it("is positive for a catalogue entry (d20 < d50 < d90)", () => {
-    expect(fitSharpness(fourMm.cut)).toBeGreaterThan(0);
+    expect(fitSharpness(fiveMm.cut)).toBeGreaterThan(0);
     expect(fitSharpness(tenMm.cut)).toBeGreaterThan(0);
   });
 
   it("gives a sharper curve to a narrower cut spread", () => {
-    // 4 mm: d20=3, d50=8, d90=25 -> ratio d90/d20 ~ 8.3
+    // 5 mm: d20=3, d50=8, d90=25 -> ratio d90/d20 ~ 8.3
     // 10 mm: d20=6, d50=15, d90=45 -> ratio d90/d20 = 7.5 (slightly narrower)
     const narrow = fitSharpness({ d20Um: 6, d50Um: 15, d90Um: 45 });
     const wide = fitSharpness({ d20Um: 3, d50Um: 15, d90Um: 90 });
@@ -23,33 +23,33 @@ describe("fitSharpness", () => {
 
 describe("gradeEfficiencyCurve", () => {
   it("carries the hydrocyclone id, d50 and cut status through unchanged", () => {
-    const curve = gradeEfficiencyCurve(fourMm);
-    expect(curve.hydrocycloneId).toBe("4mm");
-    expect(curve.d50Um).toBe(fourMm.cut.d50Um);
-    expect(curve.status).toBe(fourMm.status.cut);
+    const curve = gradeEfficiencyCurve(fiveMm);
+    expect(curve.hydrocycloneId).toBe("5mm");
+    expect(curve.d50Um).toBe(fiveMm.cut.d50Um);
+    expect(curve.status).toBe(fiveMm.status.cut);
     expect(curve.source).toBe("fitted-curve");
   });
 
   it("never reports a guessed cut as measured", () => {
     // Both catalogue entries are guesses today; this pins that the field is
     // read from the data, not assumed, so it changes the moment the data does.
-    expect(gradeEfficiencyCurve(fourMm).status).toBe("guessed");
+    expect(gradeEfficiencyCurve(fiveMm).status).toBe("guessed");
     expect(gradeEfficiencyCurve(tenMm).status).toBe("guessed");
   });
 });
 
 describe("gradeEfficiency", () => {
-  const curve = gradeEfficiencyCurve(fourMm);
+  const curve = gradeEfficiencyCurve(fiveMm);
 
   it("passes through exactly 0.5 at d50, by construction", () => {
-    expect(gradeEfficiency(curve, fourMm.cut.d50Um)).toBeCloseTo(0.5, 9);
+    expect(gradeEfficiency(curve, fiveMm.cut.d50Um)).toBeCloseTo(0.5, 9);
   });
 
   it("passes close to 0.2 at d20 and 0.9 at d90", () => {
     // Not exact: one m cannot satisfy three points, so this is the fit
     // quality, not an identity.
-    expect(gradeEfficiency(curve, fourMm.cut.d20Um)).toBeCloseTo(0.2, 1);
-    expect(gradeEfficiency(curve, fourMm.cut.d90Um)).toBeCloseTo(0.9, 1);
+    expect(gradeEfficiency(curve, fiveMm.cut.d20Um)).toBeCloseTo(0.2, 1);
+    expect(gradeEfficiency(curve, fiveMm.cut.d90Um)).toBeCloseTo(0.9, 1);
   });
 
   it("is monotonically increasing with size", () => {
@@ -80,9 +80,9 @@ describe("gradeEfficiency", () => {
   });
 });
 
-describe("the 10 mm unit cuts coarser than the 4 mm unit", () => {
+describe("the 10 mm unit cuts coarser than the 5 mm unit", () => {
   it("removes less of a mid-size particle than the smaller unit does", () => {
-    const small = gradeEfficiencyCurve(fourMm);
+    const small = gradeEfficiencyCurve(fiveMm);
     const large = gradeEfficiencyCurve(tenMm);
     expect(gradeEfficiency(large, 10)).toBeLessThan(gradeEfficiency(small, 10));
   });

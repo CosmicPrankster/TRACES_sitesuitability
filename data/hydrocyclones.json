@@ -16,9 +16,9 @@
   ],
   "hydrocyclones": [
     {
-      "id": "4mm",
-      "name": "4 mm hydrocyclone",
-      "diameterMm": 4,
+      "id": "5mm",
+      "name": "5 mm hydrocyclone",
+      "diameterMm": 5,
       "cut": { "d20Um": 3, "d50Um": 8, "d90Um": 25 },
       "operating": {
         "flowLpmMin": 1.5,
@@ -36,7 +36,15 @@
         "A smaller body gives a finer cut than a larger one at comparable conditions. That ordering is the only thing these guesses are anchored to.",
         "Highest-value measurement: size the feed and the overflow on the same run to get a real d50."
       ],
-      "revisions": []
+      "revisions": [
+        {
+          "date": "2026-09-02",
+          "changed": "id, name, diameterMm",
+          "from": { "id": "4mm", "name": "4 mm hydrocyclone", "diameterMm": 4 },
+          "to": { "id": "5mm", "name": "5 mm hydrocyclone", "diameterMm": 5 },
+          "because": "The physical unit is 5 mm, not 4 mm - a labelling correction, not a new measurement. Cut sizes and operating envelope are unchanged: they were already guessed and anchored only to the smaller-cuts-finer ordering against the 10 mm unit, which still holds."
+        }
+      ]
     },
     {
       "id": "10mm",
@@ -56,7 +64,7 @@
       },
       "source": "Diameter is the nominal designation. All performance values are guesses.",
       "notes": [
-        "Coarser cut than the 4 mm unit, and passes considerably more flow.",
+        "Coarser cut than the 5 mm unit, and passes considerably more flow.",
         "Highest-value measurement: size the feed and the overflow on the same run to get a real d50."
       ],
       "revisions": []

@@ -28,9 +28,9 @@
       "observer": null,
       "kind": "separation-confirmed",
       "feed": "disturbed-bed",
-      "hydrocycloneIds": ["4mm", "10mm"],
+      "hydrocycloneIds": ["5mm", "10mm"],
       "membraneIds": [],
-      "observation": "Riverbed sediment was deliberately disturbed upstream and the water processed through the system. Physical separation was confirmed in both the 10 mm and the 4 mm hydrocyclone; solids reported to the underflow in both units.",
+      "observation": "Riverbed sediment was deliberately disturbed upstream and the water processed through the system. Physical separation was confirmed in both the 10 mm and the 5 mm hydrocyclone; solids reported to the underflow in both units.",
       "shows": [
         "Both units physically separate solids on water from this site.",
         "Both passed a coarse, concentrated feed without blocking or bridging - a real operability result, and often where small-diameter cyclones fail.",

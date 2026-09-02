@@ -22,8 +22,8 @@ describe("data files are valid", () => {
 describe("hydrocyclones", () => {
   const cyclones = loadHydrocyclones();
 
-  it("holds the 4 mm and 10 mm units", () => {
-    expect(cyclones.map((h) => h.id).sort()).toEqual(["10mm", "4mm"]);
+  it("holds the 5 mm and 10 mm units", () => {
+    expect(cyclones.map((h) => h.id).sort()).toEqual(["10mm", "5mm"]);
   });
 
   it("labels its performance values as guesses, because they are", () => {
@@ -43,10 +43,10 @@ describe("hydrocyclones", () => {
   });
 
   it("gives the smaller body the finer cut", () => {
-    const four = cyclones.find((h) => h.id === "4mm")!;
+    const five = cyclones.find((h) => h.id === "5mm")!;
     const ten = cyclones.find((h) => h.id === "10mm")!;
-    expect(four.diameterMm).toBeLessThan(ten.diameterMm);
-    expect(four.cut.d50Um).toBeLessThan(ten.cut.d50Um);
+    expect(five.diameterMm).toBeLessThan(ten.diameterMm);
+    expect(five.cut.d50Um).toBeLessThan(ten.cut.d50Um);
   });
 
   it("has an empty revision history to start from", () => {
@@ -84,7 +84,7 @@ describe("field observations", () => {
     const o = observations.find((x) => x.siteId === "tilford");
     expect(o).toBeDefined();
     expect(o!.kind).toBe("separation-confirmed");
-    expect(o!.hydrocycloneIds.sort()).toEqual(["10mm", "4mm"]);
+    expect(o!.hydrocycloneIds.sort()).toEqual(["10mm", "5mm"]);
   });
 
   it("qualifies the Tilford result as a disturbed-bed feed, not normal running", () => {
