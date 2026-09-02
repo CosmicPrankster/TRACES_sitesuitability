@@ -4,6 +4,7 @@ import {
   fromNrfaRecord,
   hasEnoughToInfer,
   inferCharacter,
+  inferCharacterFromGeologyOnly,
   type CatchmentProperties,
 } from "@/lib/character";
 
@@ -283,5 +284,53 @@ describe("the permeability trap (Spey at Boat of Garten, real data)", () => {
       coarseness: -0.6, statement: "x", bedrockIsCrystalline: true, coarseSuperficial: false,
     })!;
     expect(["silt", "clay"]).toContain(r.character);
+  });
+});
+
+describe("inferCharacterFromGeologyOnly - the no-NRFA-gauge fallback", () => {
+  // Real BGS descriptions already used elsewhere in this file: the Spey's
+  // psammite-under-glaciofluvial-sand point (coarse) and a plain fine clay
+  // point, so this exercises both ends of the same threshold inferCharacter
+  // uses, without any catchment data at all.
+  const SPEY_GEOLOGY = {
+    coarseness: 0.72,
+    statement:
+      "At this point BGS maps superficial deposits of Glaciofluvial sheet deposits, Devensian " +
+      "(Sand, gravel and boulders), over Grampian Group bedrock (Micaceous psammite).",
+  };
+  const CLAY_POINT_GEOLOGY = {
+    coarseness: -0.7,
+    statement: "At this point BGS maps Mudstone bedrock.",
+  };
+
+  it("never returns anything above low confidence - there is no catchment to corroborate with", () => {
+    expect(inferCharacterFromGeologyOnly(SPEY_GEOLOGY).confidence).toBe("low");
+    expect(inferCharacterFromGeologyOnly(CLAY_POINT_GEOLOGY).confidence).toBe("low");
+  });
+
+  it("uses the same coarseness thresholds as the catchment-based inference", () => {
+    expect(inferCharacterFromGeologyOnly(SPEY_GEOLOGY).character).toBe("sand");
+    expect(["silt", "clay"]).toContain(inferCharacterFromGeologyOnly(CLAY_POINT_GEOLOGY).character);
+  });
+
+  it("says plainly that this is a single point, not a catchment-wide reading", () => {
+    const r = inferCharacterFromGeologyOnly(SPEY_GEOLOGY);
+    const prose = r.reasoning.join(" ");
+    expect(prose).toMatch(/no NRFA gauging station/i);
+    expect(prose).toMatch(/not from a catchment-wide reading/i);
+    expect(prose).toContain(SPEY_GEOLOGY.statement);
+  });
+
+  it("still points to a raw sample as the thing that would most improve it", () => {
+    const prose = inferCharacterFromGeologyOnly(SPEY_GEOLOGY).wouldChangeThis.join(" ");
+    expect(prose).toMatch(/settle-bottle test/i);
+    expect(prose).toMatch(/particle-size distribution/i);
+  });
+
+  it("records the geology as the evidence, honestly labelled as the only source", () => {
+    const r = inferCharacterFromGeologyOnly(SPEY_GEOLOGY);
+    expect(r.evidence).toEqual([
+      { field: "bgs-geology", value: 0.72, means: "mapped geology at the point (no catchment data available)" },
+    ]);
   });
 });

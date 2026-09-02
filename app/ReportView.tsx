@@ -31,7 +31,10 @@ interface Props {
 }
 
 interface Screened {
-  station: { id: number; name: string; "catchment-area"?: number };
+  /** Present for a confirmed NRFA station; absent for the geology-only fallback. */
+  station?: { id: number; name: string; "catchment-area"?: number };
+  /** Set when there was no NRFA gauge nearby - see lib/live-site.ts's screenPointGeology. */
+  source?: "geology-only";
   geologyStatement: string | null;
   characterInference: CharacterInference;
   psd: Psd;
@@ -93,8 +96,16 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
         setFlow({ phase: "match-failed", stage: data.stage, message: data.message });
         return;
       }
-      if (data.resolution.confidence === "none" || data.resolution.candidates.length === 0) {
-        setFlow({ phase: "match-failed", stage: "no-match", message: data.resolution.statement });
+      if (data.source === "geology-only") {
+        setFlow({
+          phase: "screened",
+          source: "geology-only",
+          geologyStatement: data.geologyStatement,
+          characterInference: data.characterInference,
+          psd: data.psd,
+          matrix: data.matrix,
+          report: data.report,
+        });
         return;
       }
       setFlow({ phase: "confirm", matchedOn: data.geocode.matchedOn, resolution: data.resolution });
@@ -192,12 +203,23 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
         </section>
       )}
 
+      {live && live.source === "geology-only" && (
+        <section className="live-status live-geology-only">
+          <p>
+            <strong>No NRFA gauge nearby</strong> - normal for a small or urban watercourse. Reading
+            from the mapped geology at this point only, not a catchment-wide inference.
+          </p>
+        </section>
+      )}
+
       {live && (
         <section className="live-status live-ok">
-          <p>
-            <strong>Screening:</strong> {live.station.name} - NRFA gauging station {live.station.id}
-            {live.station["catchment-area"] ? `, catchment area ${live.station["catchment-area"]} km²` : ""}.
-          </p>
+          {live.station && (
+            <p>
+              <strong>Screening:</strong> {live.station.name} - NRFA gauging station {live.station.id}
+              {live.station["catchment-area"] ? `, catchment area ${live.station["catchment-area"]} km²` : ""}.
+            </p>
+          )}
           <p>
             <strong>Inferred character:</strong> {CHARACTER_LABELS[live.characterInference.character]}{" "}
             (confidence: {live.characterInference.confidence})

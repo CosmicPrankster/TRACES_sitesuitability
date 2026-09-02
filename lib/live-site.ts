@@ -9,6 +9,7 @@ import {
 import {
   fromNrfaRecord,
   inferCharacter,
+  inferCharacterFromGeologyOnly,
   type CatchmentProperties,
   type CharacterInference,
   type GeologyCorroboration,
@@ -121,6 +122,23 @@ async function fetchBgsLayer(layer: string, easting: number, northing: number) {
   return xml ? parseBgsFeatureInfo(xml) : null;
 }
 
+async function fetchGeologyCorroboration(easting: number, northing: number): Promise<GeologyCorroboration | undefined> {
+  const [bedrock, superficial] = await Promise.all([
+    fetchBgsLayer("BGS.50k.Bedrock", easting, northing),
+    fetchBgsLayer("BGS.50k.Superficial.deposits", easting, northing),
+  ]);
+  const geologySummary = bedrock || superficial ? summariseGeology({ bedrock, superficial }) : null;
+  if (!geologySummary || geologySummary.coarseness === null) return undefined;
+
+  const superficialSignal = readLithology(superficial?.lithology ?? null);
+  return {
+    coarseness: geologySummary.coarseness,
+    statement: geologySummary.statement,
+    bedrockIsCrystalline: isCrystallineBedrock(bedrock?.lithology ?? null),
+    coarseSuperficial: (superficialSignal?.coarseness ?? 0) > 0.3,
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Step 1: match - cheap, never commits to a station                   */
 /* ------------------------------------------------------------------ */
@@ -132,6 +150,8 @@ export type SiteMatchFailure =
 export interface SiteMatchSuccess {
   ok: true;
   geocode: GeocodeResult;
+  /** British National Grid coordinates of the geocoded point - what a geology-only fallback needs. */
+  bng: { easting: number; northing: number };
   /** Carries .candidates, .confidence, .needsConfirmation - nothing is auto-picked. */
   resolution: Resolution;
 }
@@ -162,7 +182,7 @@ export async function matchSite(query: string): Promise<SiteMatchResult> {
 
   const matches = rankStations(parsed, stations, 5, bng);
   const resolution = decideResolution(parsed, matches);
-  return { ok: true, geocode, resolution };
+  return { ok: true, geocode, bng, resolution };
 }
 
 /* ------------------------------------------------------------------ */
@@ -183,26 +203,12 @@ export type StationScreenResult = StationScreenSuccess | StationScreenFailure;
 
 /** Full catchment record + BGS geology + character inference for a CONFIRMED station. */
 export async function screenStation(station: NrfaStation): Promise<StationScreenResult> {
-  const [fullRecord, bedrock, superficial] = await Promise.all([
+  const [fullRecord, corroboration] = await Promise.all([
     fetchNrfaFullRecord(station.id),
-    fetchBgsLayer("BGS.50k.Bedrock", station.easting, station.northing),
-    fetchBgsLayer("BGS.50k.Superficial.deposits", station.easting, station.northing),
+    fetchGeologyCorroboration(station.easting, station.northing),
   ]);
 
   const catchment = fromNrfaRecord(fullRecord ?? { id: station.id, name: station.name });
-  const geologySummary = bedrock || superficial ? summariseGeology({ bedrock, superficial }) : null;
-
-  let corroboration: GeologyCorroboration | undefined;
-  if (geologySummary && geologySummary.coarseness !== null) {
-    const superficialSignal = readLithology(superficial?.lithology ?? null);
-    corroboration = {
-      coarseness: geologySummary.coarseness,
-      statement: geologySummary.statement,
-      bedrockIsCrystalline: isCrystallineBedrock(bedrock?.lithology ?? null),
-      coarseSuperficial: (superficialSignal?.coarseness ?? 0) > 0.3,
-    };
-  }
-
   const characterInference = inferCharacter(catchment, corroboration);
   if (!characterInference) {
     return {
@@ -212,5 +218,42 @@ export async function screenStation(station: NrfaStation): Promise<StationScreen
     };
   }
 
-  return { ok: true, station, catchment, geologyStatement: geologySummary?.statement ?? null, characterInference };
+  return { ok: true, station, catchment, geologyStatement: corroboration?.statement ?? null, characterInference };
+}
+
+/* ------------------------------------------------------------------ */
+/* Fallback: no NRFA gauge nearby - geology at the point alone          */
+/* ------------------------------------------------------------------ */
+
+export type PointGeologyFailure = { ok: false; stage: "no-geology-data"; message: string };
+
+export interface PointGeologySuccess {
+  ok: true;
+  geologyStatement: string;
+  characterInference: CharacterInference;
+}
+
+export type PointGeologyResult = PointGeologySuccess | PointGeologyFailure;
+
+/**
+ * The fallback promised by decideResolution's "none" case: normal for a
+ * small or urban watercourse with no NRFA gauge nearby. Needs no
+ * confirmation step (resolution.needsConfirmation is already false for
+ * "none" - there is no candidate to choose between, only the presence or
+ * absence of mapped geology at the one point already geocoded).
+ */
+export async function screenPointGeology(easting: number, northing: number): Promise<PointGeologyResult> {
+  const corroboration = await fetchGeologyCorroboration(easting, northing);
+  if (!corroboration) {
+    return {
+      ok: false,
+      stage: "no-geology-data",
+      message: "BGS has no mapped geology at this point either, so there is nothing to infer solids character from.",
+    };
+  }
+  return {
+    ok: true,
+    geologyStatement: corroboration.statement,
+    characterInference: inferCharacterFromGeologyOnly(corroboration),
+  };
 }

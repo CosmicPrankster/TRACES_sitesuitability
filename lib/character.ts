@@ -308,6 +308,53 @@ export function inferCharacter(
   return { character, confidence, reasoning, wouldChangeThis, evidence };
 }
 
+/** size -> character thresholds, shared with inferCharacter so the two paths agree. */
+function characterFromCoarseness(coarseness: number): ParticleCharacter {
+  if (coarseness >= 0.55) return "sand";
+  if (coarseness >= 0.1) return "mixed_mineral";
+  if (coarseness >= -0.5) return "silt";
+  return "clay";
+}
+
+/**
+ * The fallback for a site with no NRFA gauge nearby - normal for a small or
+ * urban watercourse, per resolve.ts's decideResolution. There is no
+ * catchment-wide data to weigh here, only the mapped geology at one point,
+ * so this is deliberately a separate, simpler function rather than a mode
+ * of inferCharacter: it must never claim the confidence a catchment-wide
+ * reading earns, and the reasoning must say plainly that this is a single
+ * point, not the catchment.
+ */
+export function inferCharacterFromGeologyOnly(geology: GeologyCorroboration): CharacterInference {
+  const character = characterFromCoarseness(geology.coarseness);
+  return {
+    character,
+    // Never anything but low: there is no catchment corroboration possible
+    // when there is no catchment data in the first place.
+    confidence: "low",
+    reasoning: [
+      "No NRFA gauging station is near enough to give catchment-wide properties for this site - " +
+        "normal for a small or urban watercourse.",
+      geology.statement,
+      `Read alone, that is ${describeCharacter(character)}. This comes from the geology mapped at ` +
+        "this one point, not from a catchment-wide reading, so it carries none of the corroboration " +
+        "a gauged site gets from bedrock permeability and base flow agreeing (or disagreeing). " +
+        "Treat it as a starting point, not a confident read.",
+    ],
+    wouldChangeThis: [
+      "A measured particle-size distribution on a raw water sample would replace this inference " +
+        "entirely, and matters more here than at a gauged site, precisely because there is no " +
+        "catchment data to fall back on.",
+      "A settle-bottle test on a raw sample would confirm or contradict it in an afternoon: rapid " +
+        "settling of gritty material indicates a coarse fraction a hydrocyclone can act on, while a " +
+        "haze that persists for hours indicates fines it cannot.",
+      "The geology reading is for one point; upstream catchment character can differ from what is " +
+        "mapped at the site itself, more so for a small catchment than a large one.",
+    ],
+    evidence: [{ field: "bgs-geology", value: geology.coarseness, means: "mapped geology at the point (no catchment data available)" }],
+  };
+}
+
 export function describeCharacter(c: ParticleCharacter): string {
   switch (c) {
     case "sand":
