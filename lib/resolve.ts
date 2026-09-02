@@ -17,11 +17,22 @@
  * Everything in this file is pure, so it is tested without a network.
  */
 
-/** Words that mark a phrase as naming water rather than a place. */
+/**
+ * Words that mark a phrase as naming water rather than a place.
+ *
+ * Missing "pond" here was a real bug: "Frensham Great Pond" then had no
+ * waterbody at all, "pond" fell into the place tokens, and coincidentally
+ * matched an unrelated NRFA station named "Wey at Kings Pond (Alton)" -
+ * a false "right place, wrong river" candidate with nothing to do with the
+ * actual pond. "pool" is added for the same reason; both are unambiguous
+ * as whole tokens (this list only ever matches whole tokens, so "pool"
+ * cannot mis-fire on "Blackpool" - see tokens()).
+ */
 const WATERBODY_WORDS = [
   "river", "burn", "beck", "brook", "stream", "water", "creek", "canal",
   "loch", "lake", "reservoir", "lough", "mere", "tarn", "estuary", "afon",
   "nant", "allt", "rivulet", "dike", "dyke", "drain", "cut", "sike", "gill",
+  "pond", "pool",
 ];
 
 /** Noise words that carry no matching signal. */
@@ -206,6 +217,52 @@ export interface Anchor {
 /** Straight-line distance in km between a station and the anchor. */
 export function distanceKm(station: NrfaStation, anchor: Anchor): number {
   return Math.hypot(station.easting - anchor.easting, station.northing - anchor.northing) / 1000;
+}
+
+/**
+ * Nearest NRFA stations to an exact anchor, by distance alone - no name to
+ * match against, because there is no name: this is for when someone gives
+ * coordinates instead of typing a place. Distance carries more weight here
+ * than in rankStations' name-first matching, so the radius is deliberately
+ * tighter than MAX_MATCH_DISTANCE_KM - a name match can be trusted further
+ * out because the name itself is evidence; a bare point cannot.
+ */
+export const COORDINATE_MATCH_DISTANCE_KM = 15;
+
+export function nearestStations(
+  anchor: Anchor,
+  stations: NrfaStation[],
+  limit = 5,
+  maxKm = COORDINATE_MATCH_DISTANCE_KM,
+): StationMatch[] {
+  return stations
+    .map((s) => ({
+      station: s,
+      score: 0,
+      reason: "",
+      matchedRiver: false,
+      matchedPlace: false,
+      distanceKm: distanceKm(s, anchor),
+    }))
+    .filter((m) => m.distanceKm <= maxKm)
+    .sort((a, b) => a.distanceKm - b.distanceKm)
+    .slice(0, limit)
+    .map((m) => ({ ...m, reason: `${m.distanceKm.toFixed(1)} km from the coordinates given.` }));
+}
+
+/**
+ * Parses "51.154565, -0.791587" (optionally space- instead of
+ * comma-separated) as WGS84 coordinates, restricted to the UK's rough
+ * bounding box so a stray pair of numbers in a place name is not
+ * misread as a location.
+ */
+export function parseCoordinates(raw: string): { lat: number; lon: number } | null {
+  const m = raw.trim().match(/^(-?\d{1,2}(?:\.\d+)?)\s*[,\s]\s*(-?\d{1,3}(?:\.\d+)?)$/);
+  if (!m) return null;
+  const lat = Number(m[1]);
+  const lon = Number(m[2]);
+  if (lat < 49 || lat > 61 || lon < -9 || lon > 2) return null;
+  return { lat, lon };
 }
 
 /**

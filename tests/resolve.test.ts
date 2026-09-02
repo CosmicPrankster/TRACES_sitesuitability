@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   decideResolution,
+  nearestStations,
+  parseCoordinates,
   parseQuery,
   rankStations,
   scoreStation,
@@ -39,7 +41,7 @@ describe("splitting the query", () => {
   it("recognises the many words British watercourses go by", () => {
     for (const q of [
       "Foo, River Bar", "Foo, Bar Burn", "Foo, Bar Beck", "Foo, Bar Water",
-      "Foo, Afon Bar", "Foo, Bar Brook", "Foo, Loch Bar",
+      "Foo, Afon Bar", "Foo, Bar Brook", "Foo, Loch Bar", "Foo, Bar Pond", "Foo, Bar Pool",
     ]) {
       expect(parseQuery(q).waterbody, q).toBeDefined();
     }
@@ -115,6 +117,82 @@ describe("matching against NRFA stations", () => {
     expect(m.matchedRiver).toBe(false);
     expect(m.score).toBeLessThan(1);
     expect(m.reason).toMatch(/different watercourse/i);
+  });
+});
+
+describe("the Kings Pond false match (real bug: 'pond' was not a water word)", () => {
+  // "Frensham Great Pond" had no waterbody word recognised at all, so "pond"
+  // fell into the settlement/place tokens instead - and coincidentally
+  // token-matched an entirely unrelated station, "Wey at Kings Pond
+  // (Alton)", scoring it a false "right place" candidate that had nothing
+  // to do with the actual pond being searched for.
+  const KINGS_POND: NrfaStation = {
+    id: 99999, name: "Wey at Kings Pond (Alton)", river: "Wey",
+    easting: 471000, northing: 138000, "catchment-area": 45.9,
+  };
+
+  it("recognises 'pond' as a waterbody word", () => {
+    const p = parseQuery("frensham great pond");
+    expect(p.waterbody).toBe("frensham great pond");
+  });
+
+  it("no longer coincidentally matches an unrelated station also named '...Pond...'", () => {
+    const parsed = parseQuery("frensham great pond");
+    const m = scoreStation(parsed, KINGS_POND);
+    expect(m.matchedPlace).toBe(false);
+    expect(m.score).toBe(0);
+    expect(m.reason).toBe("No match.");
+  });
+});
+
+describe("parseCoordinates - the lat/lon direct-input path", () => {
+  it("reads real coordinates for Frensham Great Pond", () => {
+    expect(parseCoordinates("51.154565, -0.791587")).toEqual({ lat: 51.154565, lon: -0.791587 });
+  });
+
+  it("accepts space-separated as well as comma-separated", () => {
+    expect(parseCoordinates("51.154565 -0.791587")).toEqual({ lat: 51.154565, lon: -0.791587 });
+  });
+
+  it("rejects a plain place name", () => {
+    expect(parseCoordinates("Tilford, River Wey")).toBeNull();
+  });
+
+  it("rejects coordinates outside the UK's rough bounding box", () => {
+    expect(parseCoordinates("40.7128, -74.0060")).toBeNull(); // New York
+  });
+
+  it("rejects two bare numbers that are not a lat/lon pair, e.g. a postcode-shaped string", () => {
+    expect(parseCoordinates("GU10 3RD")).toBeNull();
+  });
+});
+
+describe("nearestStations - distance alone, for a coordinate anchor with no name to match", () => {
+  it("finds the closest station within range, nearest first", () => {
+    const anchor = { easting: 487300, northing: 143400 }; // exactly Wey at Tilford
+    const ranked = nearestStations(anchor, STATIONS);
+    expect(ranked[0].station.id).toBe(39011);
+    expect(ranked[0].distanceKm).toBeCloseTo(0, 3);
+  });
+
+  it("excludes anything beyond the (tighter) coordinate match radius", () => {
+    const anchor = { easting: 487300, northing: 143400 }; // Tilford
+    const ranked = nearestStations(anchor, STATIONS);
+    expect(ranked.map((m) => m.station.id)).not.toContain(39001); // Thames at Kingston, ~35km off
+  });
+
+  it("returns nothing rather than a distant guess when nothing is close", () => {
+    const middleOfNowhere = { easting: 400000, northing: 400000 };
+    expect(nearestStations(middleOfNowhere, STATIONS)).toEqual([]);
+  });
+
+  it("never claims a name match - there is no name here", () => {
+    const anchor = { easting: 487300, northing: 143400 };
+    for (const m of nearestStations(anchor, STATIONS)) {
+      expect(m.matchedRiver).toBe(false);
+      expect(m.matchedPlace).toBe(false);
+      expect(m.score).toBe(0);
+    }
   });
 });
 

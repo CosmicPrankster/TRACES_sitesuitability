@@ -154,15 +154,17 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
 
       <section className="input-row">
         <label htmlFor="site-input">
-          <strong>Site input</strong> - e.g. &quot;Tilford, River Wey&quot;. Resolves live via
-          Nominatim + NRFA. You confirm the match before anything is screened.
+          <strong>Site input</strong> - e.g. &quot;Tilford, River Wey&quot;, or exact coordinates
+          (&quot;51.154565, -0.791587&quot;) when a name is hard to match, such as a pond or a
+          small watercourse. Resolves live via Nominatim + NRFA. You confirm the match before
+          anything is screened.
         </label>
         <div className="site-input-row">
           <input
             id="site-input"
             type="text"
             value={query}
-            placeholder="Settlement, waterbody"
+            placeholder="Settlement, waterbody - or lat, lon"
             onChange={(e) => setQuery(e.target.value)}
             onKeyDown={(e) => e.key === "Enter" && lookUp()}
           />
@@ -212,13 +214,20 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
             <strong>No NRFA gauge nearby</strong> - normal for a small or urban watercourse. Reading
             from the mapped geology at this point only, not a catchment-wide inference.
           </p>
-          {live.geocode && (
+          {live.geocode && live.geocode.matchedOn === "coordinates" ? (
             <p>
-              <strong>Anchor point:</strong> &quot;{live.geocode.matchedOn}&quot; ({live.geocode.displayName}).
-              For a small watercourse this is often the nearest settlement, not the water itself -
-              if it runs some distance from that point, the geology there may differ from what is
-              mapped here. Treat this reading as a rough starting point, not the site itself confirmed.
+              <strong>Anchor point:</strong> the exact coordinates given ({live.geocode.displayName}) -
+              no settlement name involved, so no anchor-precision caveat applies here.
             </p>
+          ) : (
+            live.geocode && (
+              <p>
+                <strong>Anchor point:</strong> &quot;{live.geocode.matchedOn}&quot; ({live.geocode.displayName}).
+                For a small watercourse this is often the nearest settlement, not the water itself -
+                if it runs some distance from that point, the geology there may differ from what is
+                mapped here. Treat this reading as a rough starting point, not the site itself confirmed.
+              </p>
+            )
           )}
         </section>
       )}

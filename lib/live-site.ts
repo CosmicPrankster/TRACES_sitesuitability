@@ -1,6 +1,9 @@
 import { wgs84ToBng } from "../scripts/lib/bng.mjs";
 import {
+  COORDINATE_MATCH_DISTANCE_KM,
   decideResolution,
+  nearestStations,
+  parseCoordinates,
   parseQuery,
   rankStations,
   type NrfaStation,
@@ -158,8 +161,56 @@ export interface SiteMatchSuccess {
 
 export type SiteMatchResult = SiteMatchSuccess | SiteMatchFailure;
 
-/** Geocodes and name-matches against NRFA. Returns candidates for the user to confirm - picks nothing. */
+/**
+ * Geocodes and name-matches against NRFA. Returns candidates for the user
+ * to confirm - picks nothing.
+ *
+ * If `query` is a bare "lat, lon" pair instead of a typed place, geocoding
+ * is skipped entirely - there is nothing to look up, the anchor is already
+ * exact - and NRFA stations are found by distance alone (nearestStations),
+ * not name matching, since there is no name to match against. This is for
+ * exactly the case a typed name struggles with: a small feature with no
+ * good name match (or none at all, like a pond edge with no settlement
+ * nearby), where the caller already knows the coordinates.
+ */
 export async function matchSite(query: string): Promise<SiteMatchResult> {
+  const coords = parseCoordinates(query);
+  if (coords) {
+    const bng = wgs84ToBng(coords.lat, coords.lon);
+    const stations = await fetchNrfaStations();
+    if (!stations) {
+      return { ok: false, stage: "nrfa-list", message: "NRFA's station list did not respond. Try again shortly." };
+    }
+    const nearby = nearestStations(bng, stations);
+    const geocode: GeocodeResult = {
+      displayName: `${coords.lat}, ${coords.lon}`,
+      lat: coords.lat,
+      lon: coords.lon,
+      matchedOn: "coordinates",
+      candidateCount: nearby.length,
+    };
+    const resolution: Resolution = nearby.length
+      ? {
+          confidence: "ambiguous",
+          statement:
+            `${nearby.length} NRFA gauging station${nearby.length > 1 ? "s" : ""} within ` +
+            `${COORDINATE_MATCH_DISTANCE_KM} km of that point. There is no name to match against ` +
+            "for coordinates, so confirm one below, or none if it is on a different watercourse to " +
+            "the one you mean.",
+          needsConfirmation: true,
+          candidates: nearby,
+        }
+      : {
+          confidence: "none",
+          statement:
+            `No NRFA gauging station within ${COORDINATE_MATCH_DISTANCE_KM} km of that point. The ` +
+            "geology will be read from the map at the exact coordinates given.",
+          needsConfirmation: false,
+          candidates: [],
+        };
+    return { ok: true, geocode, bng, resolution };
+  }
+
   const parsed = parseQuery(query);
   const candidates = [parsed.settlement, parsed.waterbody, ...(parsed.anchorCandidates ?? []), query].filter(
     (v): v is string => Boolean(v),
