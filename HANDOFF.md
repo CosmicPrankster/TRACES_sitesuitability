@@ -167,6 +167,29 @@ invented: it needs a defensible source, and none has been checked.
 **Bench data is not site data.** Crushed aquarium soil characterises the
 hydrocyclone, not any river.
 
+**The model assumes the cyclone never makes fouling worse.** In
+`lib/assessment.ts`, `foulingReduction` is clamped to `[0, 1]` and
+`volumeRatio = 1/sqrt(1-foulingReduction)`, so the floor is always 1x - "no
+benefit," never "worse than untreated." Literature raises at least four real
+mechanisms by which pretreatment could speed up fouling instead: shear in the
+vortex/apex breaking friable flocs or algal colonies into finer fragments
+than the natural feed (fouling resistance goes as 1/d², so breakage can
+manufacture fouling potential, not just fail to remove it); loss of a
+"filter aid" effect, where stripping the coarse fraction leaves a fine-skewed
+cake that packs denser per gram than the natural mixed-size feed would have
+(the model sums `massFraction / d²` independently per size bin, which can't
+represent this); weaker shear-induced back-transport at the membrane if this
+ever runs crossflow, since coarse particles self-scour a crossflow surface
+far more effectively than fines (back-transport scales roughly with particle
+size cubed) - not applicable to the dead-end bench trials run so far, but
+worth remembering if crossflow is ever tried; and shear releasing NOM or
+biopolymer-bound organics into solution, causing irreversible/pore-blocking
+fouling that this model - which only ever tracks particulate PSD mass - does
+not represent at all. None of these are built in: no measured basis exists
+yet for how much worse, from which mechanism, at which site, and a guessed
+fouling *penalty* would be worse than the current honest silence on it. Left
+here so a future reader does not have to rediscover the gap from scratch.
+
 ## What would most improve this, in order
 
 1. **One filtration trial** — raw water and hydrocyclone overflow through the
