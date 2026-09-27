@@ -190,6 +190,41 @@ yet for how much worse, from which mechanism, at which site, and a guessed
 fouling *penalty* would be worse than the current honest silence on it. Left
 here so a future reader does not have to rediscover the gap from scratch.
 
+## Outside critique (2026-09-27) — not yet actioned
+
+An external reviewer raised eight points against the tool. None of these have
+been investigated or fixed yet — recorded here verbatim so they aren't lost
+before that happens in a separate pass.
+
+1. **Suspended vs bedload.** The tool infers a sand-grade suspended load from
+   bedrock. At base flow the suspended load is mostly silt and clay regardless
+   of geology, and sand moves near the bed. Geology is a better predictor of
+   storm-flow and bed material than of what's in a mid-channel sample on a
+   calm day.
+2. **"Two independent datasets agree."** Alluvium is mapped as clay, silt,
+   sand and gravel, so it doesn't really confirm "sand." That wording
+   overstates confidence.
+3. **"Coarser and lighter."** In the catchment explanation, "lighter" is
+   ambiguous: it could mean lower concentration or lower density. Quartz isn't
+   lighter than clay minerals.
+4. **No validation.** Show predicted vs observed multipliers for the six
+   field sites, noting the tool was built after them. The Irthing (sandstone,
+   5 µm) result is a useful check.
+5. **Unsupported thresholds.** The ≥10 mm/72 h rainfall trigger and the
+   medium/high confidence labels need a stated basis, even if it's
+   "provisional, from X."
+6. **Organics and colloids.** The tool only models mineral sediment, but the
+   project's own report says organics and colloids foul filters regardless of
+   the hydrocyclone. At minimum, flag sites with high organic or agricultural
+   load — high arable percentage, or a wastewater treatment works nearby — as
+   uncertain.
+7. **Naming clash.** "Settle-bottle proxy (from known geology)" shares a name
+   with the field settle test. Rename it, for example "inferred settling
+   class," to avoid confusion.
+8. **Output uncertainty.** Show a range or confidence band per cell rather
+   than a single multiplier, consistent with the tool's "very rough guess"
+   caveat.
+
 ## What would most improve this, in order
 
 1. **One filtration trial** — raw water and hydrocyclone overflow through the
