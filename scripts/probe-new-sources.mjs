@@ -108,6 +108,16 @@ await get("UKSO WMS GetCapabilities (ukso.org/geoserver guess)",
 // Cranfield's own host rather than another single guessed path.
 await get("Soilscapes ArcGIS services directory listing (landis.org.uk)",
   "https://www.landis.org.uk/arcgis/rest/services?f=json");
+// The user pulled a REAL working example from the LandIS portal's own API
+// Explorer (after registering): an ArcGIS Online-hosted FeatureServer under
+// org BsCa1SurMySYByZ3, for soil auger profile points. Proving this exact
+// pattern first, then listing ALL services under the same org - if auger
+// profiles live here, a Soilscapes texture-class layer likely does too,
+// without guessing its exact name.
+await get("LandIS AUGERprofile FeatureServer query (real example from API Explorer)",
+  "https://services-eu1.arcgis.com/BsCa1SurMySYByZ3/arcgis/rest/services/AUGERprofile/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson&resultRecordCount=3");
+await get("LandIS ArcGIS Online org services directory",
+  "https://services-eu1.arcgis.com/BsCa1SurMySYByZ3/arcgis/rest/services?f=json");
 // BGS already hosts a WORKING ArcGIS-based WMS for geology (see lib/live-site.ts's
 // BGS_WMS) - UKSO is also a BGS service, so the same host/pattern is a better-
 // grounded guess than a cold one.
@@ -129,6 +139,10 @@ console.log();
 // linked-data API instead, which is a different, newer surface than
 // whatever the original 5 forms hit.
 console.log(`${c.cyan}2. EA Water Quality Archive (re-probe, modern API)${c.reset}`);
+// A real, documented api-docs page exists - found by the user, not guessed.
+// Hit it directly rather than assuming the linked-data guess below is still
+// the right shape; this should say what (if anything) replaced it.
+await get("EA water-quality api-docs page", "https://environment.data.gov.uk/water-quality/api-docs", { accept: "text/html" });
 const wqPoints = await get("sampling points near site",
   `https://environment.data.gov.uk/water-quality/id/sampling-points?lat=${lat}&long=${lon}&dist=10&_limit=5`);
 if (wqPoints?.items?.length) {
