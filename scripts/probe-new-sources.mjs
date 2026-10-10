@@ -110,6 +110,13 @@ await get("UKSO WMS GetCapabilities (ukso.org/geoserver guess)",
 await get("UKSO WMS GetCapabilities (BGS ArcGIS host guess)",
   "https://map.bgs.ac.uk/arcgis/services/UKSO/UKSO_Soils/MapServer/WMSServer?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
   { accept: "text/xml" });
+// That guessed service name got a generic ArcGIS error with no hint. Rather
+// than guess another folder name blind, ask the server directly what it
+// actually hosts - ArcGIS Server exposes a REST directory listing. This
+// settles whether a UKSO/soil service exists on this host at all, instead
+// of another shot in the dark.
+await get("BGS ArcGIS services directory listing",
+  "https://map.bgs.ac.uk/arcgis/rest/services?f=json");
 console.log();
 
 /* ---- 2. EA Water Quality Archive - RE-PROBE with the modern linked-data API */

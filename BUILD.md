@@ -48,6 +48,29 @@ those sites stays what it is - BGS geology at the anchor point alone, low
 confidence, honestly labelled as a point reading (see
 `lib/character.ts`'s `inferCharacterFromGeologyOnly`).
 
+### Rebuild phase 0: five candidate sources for the new input hierarchy
+
+Run with `scripts/probe-new-sources.mjs` (requires real network, so run by
+the user, not in this sandbox - see HANDOFF.md). First pass reported 4/5 as
+"ok" by HTTP status alone; inspecting the actual bodies showed two of those
+were soft-404s/error pages returned with a 200 status - the exact "never
+report an empty response as a success" mistake this project was bitten by
+once already. The probe's `get()` helper now rejects an HTML body when XML
+was requested, regardless of status code, so this self-corrects on future
+runs.
+
+| Source | Result |
+|---|---|
+| **Admiralty UK Tidal API** (tide state) | **Kept.** Real 607-station GeoJSON list, then real high/low-water events (heights + times) for the nearest station once the station ID field was read correctly (`feature.properties.Id`, not `feature.id` - the OpenAPI spec's own prose was wrong on this point). Needs `ADMIRALTY_TIDE_API_KEY`. |
+| **Copernicus Data Space** (satellite turbidity) | **OAuth2 proven**, full Sentinel-2/3 data fetch not yet attempted. Needs `COPERNICUS_CLIENT_ID`/`COPERNICUS_CLIENT_SECRET`. |
+| EA Water Quality Archive | **Dropped again.** `environment.data.gov.uk/water-quality/...` now serves a Next.js web dashboard (144 KB of HTML/JS), not an API - the data API this project tried once before (and already dropped, above) has been replaced by a website, not just moved. |
+| UKSO (soil texture) | **Dropped, two guesses + one directory probe tried.** `ukso.org/geoserver/wms` returns UKSO's own "404 - Page not found" page with a 200 status. A guessed BGS-hosted path (`map.bgs.ac.uk/arcgis/services/UKSO/...`) got a generic ArcGIS 400 with no service-name hint; an ArcGIS REST directory listing was tried next rather than guessing further folder names blind. |
+| UKCEH Land Cover Map | **Dropped for now.** `catalogue.ceh.ac.uk/maps/wms` returns HTTP 200 but the body is a MapServer backend error (`Unable to access file (/maps/wms_default.map)`) - their service is misconfigured server-side right now, not a wrong URL on this project's end. |
+
+Soilscapes (Cranfield), UKSO and UKCEH LCM all need their real endpoint found
+via a browser's dev tools Network tab against the official map viewer, not
+further blind guessing - see HANDOFF.md.
+
 ### Two findings that mattered more than the pass/fail list
 
 **The v1 probe reported empty responses as "ok".** That hid the BGS failure
