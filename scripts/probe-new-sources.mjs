@@ -108,6 +108,13 @@ await get("UKSO WMS GetCapabilities (ukso.org/geoserver guess)",
 // Cranfield's own host rather than another single guessed path.
 await get("Soilscapes ArcGIS services directory listing (landis.org.uk)",
   "https://www.landis.org.uk/arcgis/rest/services?f=json");
+// That directory listing CONFIRMED real "Soilscapes" and "UKSoilObservatory"
+// folders exist on this host - not a guess, read straight from the server's
+// own response. One level deeper, into each, to find the actual service name.
+await get("Soilscapes folder contents (landis.org.uk)",
+  "https://www.landis.org.uk/arcgis/rest/services/Soilscapes?f=json");
+await get("UKSoilObservatory folder contents (landis.org.uk)",
+  "https://www.landis.org.uk/arcgis/rest/services/UKSoilObservatory?f=json");
 // The user pulled a REAL working example from the LandIS portal's own API
 // Explorer (after registering): an ArcGIS Online-hosted FeatureServer under
 // org BsCa1SurMySYByZ3, for soil auger profile points. Proving this exact
@@ -131,6 +138,10 @@ await get("UKSO WMS GetCapabilities (BGS ArcGIS host guess)",
 // of another shot in the dark.
 await get("BGS ArcGIS services directory listing",
   "https://map.bgs.ac.uk/arcgis/rest/services?f=json");
+// That listing also confirmed a real "UKSO" folder on BGS's own server -
+// a second, independent host hosting UKSO data. One level deeper.
+await get("UKSO folder contents (map.bgs.ac.uk)",
+  "https://map.bgs.ac.uk/arcgis/rest/services/UKSO?f=json");
 console.log();
 
 /* ---- 2. EA Water Quality Archive - RE-PROBE with the modern linked-data API */
@@ -143,6 +154,10 @@ console.log(`${c.cyan}2. EA Water Quality Archive (re-probe, modern API)${c.rese
 // Hit it directly rather than assuming the linked-data guess below is still
 // the right shape; this should say what (if anything) replaced it.
 await get("EA water-quality api-docs page", "https://environment.data.gov.uk/water-quality/api-docs", { accept: "text/html" });
+// That page's own markup references /water-quality/api/swagger directly -
+// almost certainly the real OpenAPI spec endpoint (same pattern as
+// COSMOS-UK's embedded spec below), found in the page content, not guessed.
+await get("EA water-quality OpenAPI spec", "https://environment.data.gov.uk/water-quality/api/swagger");
 const wqPoints = await get("sampling points near site",
   `https://environment.data.gov.uk/water-quality/id/sampling-points?lat=${lat}&long=${lon}&dist=10&_limit=5`);
 if (wqPoints?.items?.length) {
@@ -169,6 +184,10 @@ await get("UKCEH LCM WMS GetCapabilities",
 // possible addition to the hierarchy even though it answers a different
 // question than arable %.
 await get("COSMOS-UK API docs", "https://cosmos-api.ceh.ac.uk/docs", { accept: "text/html" });
+// The spec embedded in that docs page (extracted directly, not guessed)
+// confirmed a real OGC EDR-style API at this base, with a /collections path.
+// List what's actually monitored - keyless, per the spec's security section.
+await get("COSMOS-UK collections list", "https://cosmos-api.ceh.ac.uk/collections");
 console.log();
 
 /* ---- 4. Tide state (estuaries) - needs a real API key ------------------- */
