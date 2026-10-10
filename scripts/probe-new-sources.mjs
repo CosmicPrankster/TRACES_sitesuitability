@@ -116,24 +116,45 @@ await get("UKCEH LCM WMS GetCapabilities",
 console.log();
 
 /* ---- 4. Tide state (estuaries) - needs a real API key ------------------- */
-// developer.admiralty.co.uk's "UK Tidal API" product, Azure API Management
-// hosted - not the same base URL as the separate EasyTide product this
-// probe originally guessed at.
+// developer.admiralty.co.uk's "UK Tidal API" (Discovery tier), confirmed
+// against its real OpenAPI spec: base https://admiraltyapi.azure-api.net/uktidalapi.
+// GET /api/V1/Stations has NO lat/long filter in this tier - only an
+// optional `name` query param - so the nearest station has to be found by
+// fetching the full ~607-station GeoJSON FeatureCollection and computing
+// distance client-side, the same pattern lib/resolve.ts already uses for
+// NRFA. Station fields live under feature.properties (Name, Country, ...);
+// feature.id is the station number, per the spec's own description.
 console.log(`${c.cyan}4. Tide state (Admiralty UK Tidal API)${c.reset}`);
 const tideKey = process.env.ADMIRALTY_TIDE_API_KEY;
 if (!tideKey) {
   skip("UK Tidal API station search", "ADMIRALTY_TIDE_API_KEY not set - see .env.local.example");
 } else {
-  const stations = await get("nearest tide stations",
-    `https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations?lat=${lat}&long=${lon}`,
-    { headers: { "Ocp-Apim-Subscription-Key": tideKey } });
-  if (Array.isArray(stations) && stations.length) {
-    const id = stations[0].Id ?? stations[0].id;
-    console.log(`     ${c.dim}nearest: ${stations[0].Name ?? "?"} (${id})${c.reset}`);
-    if (id) {
-      await get("station tidal events (GetStation)",
-        `https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations/${id}/TidalEvents`,
-        { headers: { "Ocp-Apim-Subscription-Key": tideKey } });
+  const tideBase = "https://admiraltyapi.azure-api.net/uktidalapi";
+  const tideHeaders = { headers: { "Ocp-Apim-Subscription-Key": tideKey } };
+  const stationsFc = await get("all tidal stations", `${tideBase}/api/V1/Stations`, tideHeaders);
+  const features = stationsFc?.features;
+  if (Array.isArray(features) && features.length) {
+    const haversineKm = (lat1, lon1, lat2, lon2) => {
+      const R = 6371, toRad = (d) => (d * Math.PI) / 180;
+      const dLat = toRad(lat2 - lat1), dLon = toRad(lon2 - lon1);
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
+      return 2 * R * Math.asin(Math.sqrt(a));
+    };
+    let nearest = null;
+    for (const f of features) {
+      const [flon, flat] = f.geometry?.coordinates ?? [];
+      if (!Number.isFinite(flat) || !Number.isFinite(flon)) continue;
+      const d = haversineKm(lat, lon, flat, flon);
+      if (!nearest || d < nearest.d) nearest = { d, f };
+    }
+    if (nearest) {
+      const id = nearest.f.id;
+      const name = nearest.f.properties?.Name ?? "?";
+      console.log(`     ${c.dim}nearest: ${name} (${id}), ${nearest.d.toFixed(1)} km${c.reset}`);
+      await get("tidal events for nearest station",
+        `${tideBase}/api/V1/Stations/${id}/TidalEvents?duration=7`, tideHeaders);
+    } else {
+      console.log(`     ${c.yellow}got a station list but no feature had usable coordinates${c.reset}`);
     }
   }
 }
