@@ -115,6 +115,14 @@ await get("Soilscapes folder contents (landis.org.uk)",
   "https://www.landis.org.uk/arcgis/rest/services/Soilscapes?f=json");
 await get("UKSoilObservatory folder contents (landis.org.uk)",
   "https://www.landis.org.uk/arcgis/rest/services/UKSoilObservatory?f=json");
+// Those two folders listed real services - "Soilscapes/soilscapes" is named
+// exactly what we're after (the national soil-type classification map, not
+// a different Cranfield product). Trying its WMS capabilities directly -
+// the same mechanism lib/live-site.ts already parses for BGS geology, so a
+// hit here reuses existing, tested code rather than needing a new parser.
+await get("Soilscapes/soilscapes WMS GetCapabilities (confirmed real service)",
+  "https://www.landis.org.uk/arcgis/services/Soilscapes/soilscapes/MapServer/WMSServer?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
+  { accept: "text/xml" });
 // The user pulled a REAL working example from the LandIS portal's own API
 // Explorer (after registering): an ArcGIS Online-hosted FeatureServer under
 // org BsCa1SurMySYByZ3, for soil auger profile points. Proving this exact
@@ -157,16 +165,20 @@ await get("EA water-quality api-docs page", "https://environment.data.gov.uk/wat
 // That page's own markup references /water-quality/api/swagger directly -
 // almost certainly the real OpenAPI spec endpoint (same pattern as
 // COSMOS-UK's embedded spec below), found in the page content, not guessed.
+// That spec confirmed the real base + path + param names, none of which
+// matched the earlier guess: base is just /water-quality (no /id/ prefix),
+// the path is singular "/sampling-point" (not plural "/sampling-points"),
+// and the geo filter params are latitude/longitude/radius (not lat/long/dist).
 await get("EA water-quality OpenAPI spec", "https://environment.data.gov.uk/water-quality/api/swagger");
-const wqPoints = await get("sampling points near site",
-  `https://environment.data.gov.uk/water-quality/id/sampling-points?lat=${lat}&long=${lon}&dist=10&_limit=5`);
+const wqPoints = await get("sampling points near site (corrected params from the real spec)",
+  `https://environment.data.gov.uk/water-quality/sampling-point?latitude=${lat}&longitude=${lon}&radius=10&limit=5`);
 if (wqPoints?.items?.length) {
   const p = wqPoints.items[0];
   console.log(`     ${c.dim}nearest: ${p.label ?? "?"} - fields: ${Object.keys(p).join(", ")}${c.reset}`);
   const notation = p.notation;
   if (notation) {
-    await get("measurements at nearest point",
-      `https://environment.data.gov.uk/water-quality/data/measurement?samplingPoint=${notation}&determinand=9901&_limit=5`);
+    await get("samples at nearest point",
+      `https://environment.data.gov.uk/water-quality/sampling-point/${notation}/sample?limit=5`);
   }
 } else {
   console.log(`     ${c.yellow}none within 10 km, or the endpoint shape has changed${c.reset}`);
@@ -188,6 +200,13 @@ await get("COSMOS-UK API docs", "https://cosmos-api.ceh.ac.uk/docs", { accept: "
 // confirmed a real OGC EDR-style API at this base, with a /collections path.
 // List what's actually monitored - keyless, per the spec's security section.
 await get("COSMOS-UK collections list", "https://cosmos-api.ceh.ac.uk/collections");
+// That list confirmed two real collections: "30M" (30-minute) and "1D"
+// (daily) site-specific data - not guessed, read from the actual response.
+// Querying the daily collection's radius search near the test site, per the
+// /collections/<id>/radius path the embedded spec documented (OGC EDR-style
+// coords=POINT(lon lat) WKT).
+await get("COSMOS-UK daily collection, nearby sites",
+  `https://cosmos-api.ceh.ac.uk/collections/1D/radius?coords=POINT(${lon} ${lat})&within=50&within-units=km&f=json`);
 console.log();
 
 /* ---- 4. Tide state (estuaries) - needs a real API key ------------------- */
