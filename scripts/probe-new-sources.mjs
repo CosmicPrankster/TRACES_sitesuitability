@@ -3,16 +3,17 @@
  * NEW-SOURCES PROBE (rebuild phase 0)
  * ====================================
  *
- * Five candidate sources for the rebuilt input hierarchy, probed the same
- * way every existing source in this project was: try it live on a real
- * site, keep only what actually responds with data. Nothing here is built
- * on until this script proves it live - see HANDOFF.md rule 1.
+ * Candidate sources for the rebuilt input hierarchy, probed the same way
+ * every existing source in this project was: try it live on a real site,
+ * keep only what actually responds with data. Nothing here is built on
+ * until this script proves it live - see HANDOFF.md rule 1. UKCEH Land
+ * Cover was dropped as a deliberate scope cut (redundant with NRFA's own
+ * arable-% field), not just a failed probe - see BUILD.md.
  *
- * One of these (EA Water Quality Archive) was already tried once and
- * failed - scripts/probe.mjs's header: "5 URL forms, all 404/403, API
- * moved or withdrawn". This run tries a different, more modern form of
- * that API (the environment.data.gov.uk linked-data endpoints) - it is a
- * genuine re-probe, not a retry of the same guess.
+ * EA Water Quality Archive was tried once before and failed - scripts/
+ * probe.mjs's header: "5 URL forms, all 404/403, API moved or withdrawn".
+ * This re-probe found a real, documented OpenAPI spec at a different path
+ * and is now proven against the actual endpoint/param names from that spec.
  *
  * Two sources (tide, satellite turbidity) need a real API key. Point the
  * matching env var at it and this script picks it up automatically - see
@@ -193,15 +194,13 @@ if (wqPoints?.items?.length || wqPoints?.features?.length) {
 console.log();
 
 /* ---- 3. UKCEH Land Cover Map - arable % --------------------------------- */
-console.log(`${c.cyan}3. UKCEH Land Cover Map${c.reset}`);
-await get("UKCEH LCM WMS GetCapabilities",
-  "https://catalogue.ceh.ac.uk/maps/wms?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
-  { accept: "text/xml" });
-// A different UKCEH service, not land cover directly - real-time soil
-// moisture/weather from the COSMOS-UK sensor network. Concrete, documented
-// endpoint (has its own /docs page), worth proving on its own merits as a
-// possible addition to the hierarchy even though it answers a different
-// question than arable %.
+// UKCEH Land Cover Map (arable %) dropped per the user's "if something is
+// redundant we cut it" call - NRFA already supplies an arable-land-cover
+// field for gauged catchments (see BUILD.md's dropped-sources table), and
+// the WMS service is broken server-side anyway. COSMOS-UK is a different
+// UKCEH service kept on its own merits (real-time soil moisture sensors),
+// not a land-cover substitute.
+console.log(`${c.cyan}3. COSMOS-UK soil moisture sensors${c.reset}`);
 await get("COSMOS-UK API docs", "https://cosmos-api.ceh.ac.uk/docs", { accept: "text/html" });
 // The spec embedded in that docs page (extracted directly, not guessed)
 // confirmed a real OGC EDR-style API at this base, with a /collections path.
