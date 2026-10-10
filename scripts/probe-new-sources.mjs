@@ -126,6 +126,12 @@ await get("Soilscapes/natmapsoilscapes WMS GetCapabilities",
   { accept: "text/xml" });
 await get("Soilscapes/natmapsoilscapes FeatureServer query (small sample)",
   "https://www.landis.org.uk/arcgis/rest/services/Soilscapes/natmapsoilscapes/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson&resultRecordCount=1");
+// Both the above failed differently (400, 500) on two different endpoint
+// shapes of the same service. One more, cheapest-possible check before
+// giving up: just the MapServer's own metadata, no query at all - if even
+// this fails, the service is down server-side, not a wrong request shape.
+await get("Soilscapes/natmapsoilscapes MapServer metadata (last check)",
+  "https://www.landis.org.uk/arcgis/rest/services/Soilscapes/natmapsoilscapes/MapServer?f=json");
 // The user pulled a REAL working example from the LandIS portal's own API
 // Explorer (after registering): an ArcGIS Online-hosted FeatureServer under
 // org BsCa1SurMySYByZ3, for soil auger profile points. Proving this exact
@@ -181,13 +187,14 @@ const wqPoints = await get("sampling points near site (corrected Accept header)"
 if (wqPoints?.items?.length || wqPoints?.features?.length) {
   const items = wqPoints.items ?? wqPoints.features;
   const p = items[0];
-  console.log(`     ${c.dim}nearest: ${JSON.stringify(p).slice(0, 150)}${c.reset}`);
-  const notation = p.notation ?? p.properties?.notation;
-  if (notation) {
-    await get("samples at nearest point",
-      `https://environment.data.gov.uk/water-quality/sampling-point/${notation}/sample?limit=5`,
-      { accept: "application/geo+json" });
-  }
+  console.log(`     ${c.dim}nearest type: ${p.properties?.type ?? "?"}${c.reset}`);
+  // All 5 nearby points were sewage-discharge/effluent monitoring, not
+  // ambient river stations - a different slice of this dataset than what
+  // we want. Listing the real type codes to find the right filter, rather
+  // than assume this near-Tilford result generalises everywhere.
+  await get("sampling-point-type codelist",
+    "https://environment.data.gov.uk/water-quality/codelist/sampling-point-type?limit=50",
+    { accept: "application/geo+json" });
 } else {
   console.log(`     ${c.yellow}none within 10 km, or the endpoint shape has changed${c.reset}`);
 }
