@@ -104,6 +104,10 @@ await get("Soilscapes WMS GetCapabilities",
 await get("UKSO WMS GetCapabilities (ukso.org/geoserver guess)",
   "https://www.ukso.org/geoserver/wms?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
   { accept: "text/xml" });
+// Same directory-listing technique as the BGS probe below, tried on
+// Cranfield's own host rather than another single guessed path.
+await get("Soilscapes ArcGIS services directory listing (landis.org.uk)",
+  "https://www.landis.org.uk/arcgis/rest/services?f=json");
 // BGS already hosts a WORKING ArcGIS-based WMS for geology (see lib/live-site.ts's
 // BGS_WMS) - UKSO is also a BGS service, so the same host/pattern is a better-
 // grounded guess than a cold one.
@@ -145,6 +149,12 @@ console.log(`${c.cyan}3. UKCEH Land Cover Map${c.reset}`);
 await get("UKCEH LCM WMS GetCapabilities",
   "https://catalogue.ceh.ac.uk/maps/wms?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
   { accept: "text/xml" });
+// A different UKCEH service, not land cover directly - real-time soil
+// moisture/weather from the COSMOS-UK sensor network. Concrete, documented
+// endpoint (has its own /docs page), worth proving on its own merits as a
+// possible addition to the hierarchy even though it answers a different
+// question than arable %.
+await get("COSMOS-UK API docs", "https://cosmos-api.ceh.ac.uk/docs", { accept: "text/html" });
 console.log();
 
 /* ---- 4. Tide state (estuaries) - needs a real API key ------------------- */
