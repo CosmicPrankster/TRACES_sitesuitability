@@ -41,6 +41,21 @@ const c = { reset: "\x1b[0m", dim: "\x1b[2m", bold: "\x1b[1m",
             green: "\x1b[32m", red: "\x1b[31m", yellow: "\x1b[33m", cyan: "\x1b[36m" };
 const results = [];
 
+// A 200 status is not proof of data - this project has been bitten by that
+// exact mistake before (HANDOFF.md: "never report an empty response as a
+// success"). A WMS GetCapabilities request that comes back as an HTML page
+// (a soft-404, or a backend error page some servers still answer with 200)
+// is a FAIL, whatever the status code says. Only reject HTML when XML was
+// actually asked for - a JSON endpoint returning JSON is fine.
+function looksLikeDisguisedFailure(accept, text) {
+  if (accept !== "text/xml") return null;
+  const head = text.trimStart().slice(0, 200).toLowerCase();
+  if (head.startsWith("<!doctype html") || head.startsWith("<html")) {
+    return "server returned an HTML page, not XML - likely a soft-404 or backend error despite the 200";
+  }
+  return null;
+}
+
 async function get(name, url, { accept = "application/json", headers = {} } = {}) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), TIMEOUT_MS);
@@ -53,10 +68,14 @@ async function get(name, url, { accept = "application/json", headers = {} } = {}
     if (text.trimStart().startsWith("{") || text.trimStart().startsWith("[")) {
       try { body = JSON.parse(text); } catch { /* keep text */ }
     }
-    const entry = { name, url, outcome: res.ok ? "ok" : "fail", httpStatus: res.status, ms, bytes: text.length, body };
+    const disguised = res.ok ? looksLikeDisguisedFailure(accept, text) : null;
+    const outcome = res.ok && !disguised ? "ok" : "fail";
+    const entry = { name, url, outcome, httpStatus: res.status, ms, bytes: text.length, body, ...(disguised ? { disguisedFailure: disguised } : {}) };
     results.push(entry);
-    console.log(`  ${res.ok ? c.green + "ok  " : c.red + "FAIL"}${c.reset} ${name} ${c.dim}${res.status}, ${ms} ms, ${text.length} b${c.reset}`);
-    return res.ok ? body : null;
+    const label = outcome === "ok" ? c.green + "ok  " : c.red + "FAIL";
+    const suffix = disguised ? ` ${c.dim}(${disguised})${c.reset}` : "";
+    console.log(`  ${label}${c.reset} ${name} ${c.dim}${res.status}, ${ms} ms, ${text.length} b${c.reset}${suffix}`);
+    return outcome === "ok" ? body : null;
   } catch (err) {
     results.push({ name, url, outcome: "fail", error: err.message });
     console.log(`  ${c.red}FAIL${c.reset} ${name} ${c.dim}${err.message}${c.reset}`);
@@ -82,8 +101,14 @@ console.log(`${c.cyan}1. Soil texture (Soilscapes / UKSO)${c.reset}`);
 await get("Soilscapes WMS GetCapabilities",
   "https://www.landis.org.uk/webservices/soilscapes_wms.cfm?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
   { accept: "text/xml" });
-await get("UKSO WMS GetCapabilities",
+await get("UKSO WMS GetCapabilities (ukso.org/geoserver guess)",
   "https://www.ukso.org/geoserver/wms?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
+  { accept: "text/xml" });
+// BGS already hosts a WORKING ArcGIS-based WMS for geology (see lib/live-site.ts's
+// BGS_WMS) - UKSO is also a BGS service, so the same host/pattern is a better-
+// grounded guess than a cold one.
+await get("UKSO WMS GetCapabilities (BGS ArcGIS host guess)",
+  "https://map.bgs.ac.uk/arcgis/services/UKSO/UKSO_Soils/MapServer/WMSServer?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
   { accept: "text/xml" });
 console.log();
 
@@ -122,8 +147,10 @@ console.log();
 // optional `name` query param - so the nearest station has to be found by
 // fetching the full ~607-station GeoJSON FeatureCollection and computing
 // distance client-side, the same pattern lib/resolve.ts already uses for
-// NRFA. Station fields live under feature.properties (Name, Country, ...);
-// feature.id is the station number, per the spec's own description.
+// NRFA. CORRECTED against a real response: the spec's prose claims
+// "the tidal station number is used as the GeoJSON feature Id", but the
+// live API actually puts it at feature.properties.Id (e.g. "0068B" for
+// Bosham), not feature.id - the spec text was wrong, not the code.
 console.log(`${c.cyan}4. Tide state (Admiralty UK Tidal API)${c.reset}`);
 const tideKey = process.env.ADMIRALTY_TIDE_API_KEY;
 if (!tideKey) {
@@ -148,7 +175,7 @@ if (!tideKey) {
       if (!nearest || d < nearest.d) nearest = { d, f };
     }
     if (nearest) {
-      const id = nearest.f.id;
+      const id = nearest.f.properties?.Id;
       const name = nearest.f.properties?.Name ?? "?";
       console.log(`     ${c.dim}nearest: ${name} (${id}), ${nearest.d.toFixed(1)} km${c.reset}`);
       await get("tidal events for nearest station",
