@@ -116,14 +116,26 @@ await get("UKCEH LCM WMS GetCapabilities",
 console.log();
 
 /* ---- 4. Tide state (estuaries) - needs a real API key ------------------- */
-console.log(`${c.cyan}4. Tide state (Admiralty EasyTide)${c.reset}`);
+// developer.admiralty.co.uk's "UK Tidal API" product, Azure API Management
+// hosted - not the same base URL as the separate EasyTide product this
+// probe originally guessed at.
+console.log(`${c.cyan}4. Tide state (Admiralty UK Tidal API)${c.reset}`);
 const tideKey = process.env.ADMIRALTY_TIDE_API_KEY;
 if (!tideKey) {
-  skip("EasyTide station search", "ADMIRALTY_TIDE_API_KEY not set - see .env.local.example");
+  skip("UK Tidal API station search", "ADMIRALTY_TIDE_API_KEY not set - see .env.local.example");
 } else {
-  await get("nearest tide station",
-    `https://easytide.admiralty.co.uk/api/stations?lat=${lat}&lon=${lon}`,
+  const stations = await get("nearest tide stations",
+    `https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations?lat=${lat}&long=${lon}`,
     { headers: { "Ocp-Apim-Subscription-Key": tideKey } });
+  if (Array.isArray(stations) && stations.length) {
+    const id = stations[0].Id ?? stations[0].id;
+    console.log(`     ${c.dim}nearest: ${stations[0].Name ?? "?"} (${id})${c.reset}`);
+    if (id) {
+      await get("station tidal events (GetStation)",
+        `https://admiraltyapi.azure-api.net/uktidalapi/api/V1/Stations/${id}/TidalEvents`,
+        { headers: { "Ocp-Apim-Subscription-Key": tideKey } });
+    }
+  }
 }
 console.log();
 
