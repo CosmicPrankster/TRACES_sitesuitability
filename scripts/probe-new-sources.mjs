@@ -115,14 +115,16 @@ await get("Soilscapes folder contents (landis.org.uk)",
   "https://www.landis.org.uk/arcgis/rest/services/Soilscapes?f=json");
 await get("UKSoilObservatory folder contents (landis.org.uk)",
   "https://www.landis.org.uk/arcgis/rest/services/UKSoilObservatory?f=json");
-// Those two folders listed real services - "Soilscapes/soilscapes" is named
-// exactly what we're after (the national soil-type classification map, not
-// a different Cranfield product). Trying its WMS capabilities directly -
-// the same mechanism lib/live-site.ts already parses for BGS geology, so a
-// hit here reuses existing, tested code rather than needing a new parser.
-await get("Soilscapes/soilscapes WMS GetCapabilities (confirmed real service)",
-  "https://www.landis.org.uk/arcgis/services/Soilscapes/soilscapes/MapServer/WMSServer?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
+// "Soilscapes/soilscapes" itself is dead (still a generic ArcGIS error, no
+// detail). The same folder also listed "Soilscapes/natmapsoilscapes" -
+// NATMAP Soilscapes is Cranfield's actual official product name for this
+// dataset, so that's the more likely real one, tried both as WMS and as a
+// direct FeatureServer query (it's listed as both types).
+await get("Soilscapes/natmapsoilscapes WMS GetCapabilities",
+  "https://www.landis.org.uk/arcgis/services/Soilscapes/natmapsoilscapes/MapServer/WMSServer?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
   { accept: "text/xml" });
+await get("Soilscapes/natmapsoilscapes FeatureServer query (small sample)",
+  "https://www.landis.org.uk/arcgis/rest/services/Soilscapes/natmapsoilscapes/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson&resultRecordCount=1");
 // The user pulled a REAL working example from the LandIS portal's own API
 // Explorer (after registering): an ArcGIS Online-hosted FeatureServer under
 // org BsCa1SurMySYByZ3, for soil auger profile points. Proving this exact
@@ -170,15 +172,20 @@ await get("EA water-quality api-docs page", "https://environment.data.gov.uk/wat
 // the path is singular "/sampling-point" (not plural "/sampling-points"),
 // and the geo filter params are latitude/longitude/radius (not lat/long/dist).
 await get("EA water-quality OpenAPI spec", "https://environment.data.gov.uk/water-quality/api/swagger");
-const wqPoints = await get("sampling points near site (corrected params from the real spec)",
-  `https://environment.data.gov.uk/water-quality/sampling-point?latitude=${lat}&longitude=${lon}&radius=10&limit=5`);
-if (wqPoints?.items?.length) {
-  const p = wqPoints.items[0];
-  console.log(`     ${c.dim}nearest: ${p.label ?? "?"} - fields: ${Object.keys(p).join(", ")}${c.reset}`);
-  const notation = p.notation;
+// The 400 named the exact fix: this API only serves application/ld+json or
+// application/geo+json, not plain application/json.
+const wqPoints = await get("sampling points near site (corrected Accept header)",
+  `https://environment.data.gov.uk/water-quality/sampling-point?latitude=${lat}&longitude=${lon}&radius=10&limit=5`,
+  { accept: "application/geo+json" });
+if (wqPoints?.items?.length || wqPoints?.features?.length) {
+  const items = wqPoints.items ?? wqPoints.features;
+  const p = items[0];
+  console.log(`     ${c.dim}nearest: ${JSON.stringify(p).slice(0, 150)}${c.reset}`);
+  const notation = p.notation ?? p.properties?.notation;
   if (notation) {
     await get("samples at nearest point",
-      `https://environment.data.gov.uk/water-quality/sampling-point/${notation}/sample?limit=5`);
+      `https://environment.data.gov.uk/water-quality/sampling-point/${notation}/sample?limit=5`,
+      { accept: "application/geo+json" });
   }
 } else {
   console.log(`     ${c.yellow}none within 10 km, or the endpoint shape has changed${c.reset}`);
@@ -204,9 +211,11 @@ await get("COSMOS-UK collections list", "https://cosmos-api.ceh.ac.uk/collection
 // (daily) site-specific data - not guessed, read from the actual response.
 // Querying the daily collection's radius search near the test site, per the
 // /collections/<id>/radius path the embedded spec documented (OGC EDR-style
-// coords=POINT(lon lat) WKT).
+// coords=POINT(lon lat) WKT). The 400 named the real options: f=json isn't
+// one of them - coveragejson or csv are. csv is easiest to eyeball here.
 await get("COSMOS-UK daily collection, nearby sites",
-  `https://cosmos-api.ceh.ac.uk/collections/1D/radius?coords=POINT(${lon} ${lat})&within=50&within-units=km&f=json`);
+  `https://cosmos-api.ceh.ac.uk/collections/1D/radius?coords=POINT(${lon} ${lat})&within=50&within-units=km&f=csv`,
+  { accept: "text/csv" });
 console.log();
 
 /* ---- 4. Tide state (estuaries) - needs a real API key ------------------- */
