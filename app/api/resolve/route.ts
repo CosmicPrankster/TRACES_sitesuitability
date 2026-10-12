@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import { matchSite, screenPointGeology } from "@/lib/live-site";
-import { loadHydrocyclones, loadMembranes } from "@/lib/data";
+import { loadHydrocyclones, loadMembranes, loadTrials } from "@/lib/data";
 import { psdForCharacter } from "@/lib/psd";
-import { assessMatrix } from "@/lib/assessment";
+import { assessSite } from "@/lib/assessment";
 import { buildReport } from "@/lib/report";
 
 export const dynamic = "force-dynamic";
@@ -43,9 +43,10 @@ export async function GET(request: Request) {
 
   const hydrocyclones = loadHydrocyclones();
   const membranes = loadMembranes();
+  const trials = loadTrials();
   const psd = psdForCharacter(pointGeology.characterInference.character);
-  const matrix = assessMatrix(psd, hydrocyclones, membranes);
-  const report = buildReport(psd, matrix, hydrocyclones, membranes);
+  const assessments = assessSite(psd, membranes, hydrocyclones, trials);
+  const report = buildReport(psd, assessments, membranes);
 
   return NextResponse.json({
     ok: true,
@@ -54,7 +55,7 @@ export async function GET(request: Request) {
     geologyStatement: pointGeology.geologyStatement,
     characterInference: pointGeology.characterInference,
     psd,
-    matrix,
+    assessments,
     report,
   });
 }

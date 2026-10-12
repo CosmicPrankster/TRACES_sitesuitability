@@ -25,11 +25,14 @@
     "half the fouling load does NOT halve the run length - it buys about 1.4x.",
     "-----------------------------------------------------------------------"
   ],
-  "volumeTargets": {
-    "marginalVolumeRatio": 1.2,
-    "promisingVolumeRatio": 1.5,
-    "strongVolumeRatio": 2.0,
-    "note": "Set by the user: 'promising' means the agent can reason to roughly 150 % of the untreated filterable volume. Below marginalVolumeRatio the verdict is 'unlikely'; between marginal and promising it is 'marginal'; at or above strongVolumeRatio it is 'strong'."
+  "upliftCategory": {
+    "likelyMultiplier": 1.5,
+    "marginalMultiplier": 1.2,
+    "note": "Rebuilt per the user's critique response: 'strong'/'promising' collapsed into a single 'likely' category, since this model cannot yet defend finer distinctions than three - categories stay this coarse until the validation loop (predicted vs observed) earns back more precision. Below marginalMultiplier the category is 'unlikely'; between marginal and likely it is 'marginal'; at or above likelyMultiplier it is 'likely'. Thresholds themselves are unchanged from the old marginal/promising cutoffs."
+  },
+  "upliftRangeMargin": {
+    "byConfidence": { "low": 0.4, "medium": 0.2, "high": 0.05 },
+    "note": "A single point multiplier is the falsely-precise output the outside critique flagged. Range width (+/- this fraction of the point multiplier, in log space) is set by confidence tier, not fitted - this is a judgement call like the thresholds above, not a statistic, until real predicted-vs-observed data exists to calibrate it properly."
   },
   "cakeResistanceExponent": {
     "value": 2,

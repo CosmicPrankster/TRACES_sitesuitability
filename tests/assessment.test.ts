@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import type { Hydrocyclone, Membrane } from "@/lib/data";
-import { loadHydrocyclones, loadMembranes } from "@/lib/data";
+import { loadHydrocyclones, loadMembranes, loadTrials } from "@/lib/data";
 import { psdForCharacter } from "@/lib/psd";
-import { assessMatrix, assessPair } from "@/lib/assessment";
+import { assessMembrane, assessSite, assessUplift } from "@/lib/assessment";
+import { calibrateBaselines } from "@/lib/baseline";
 
 const cyclones = loadHydrocyclones();
 const fiveMm = cyclones.find((h) => h.id === "5mm")!;
@@ -10,104 +11,114 @@ const tenMm = cyclones.find((h) => h.id === "10mm")!;
 const membranes = loadMembranes();
 const fiveUm = membranes.find((m) => m.id === "5um")!;
 const twentyUm = membranes.find((m) => m.id === "20um")!;
+const trials = loadTrials();
+const membranesByPoreSize = new Map(membranes.map((m) => [m.poreSizeUm, m]));
+const calibrations = calibrateBaselines(trials, membranesByPoreSize);
 
-describe("assessPair: today's real, all-guessed data (no trial required anywhere)", () => {
-  it("gives a sand site real benefit from the 5mm cyclone at a coarse membrane", () => {
-    const cell = assessPair(psdForCharacter("sand"), fiveMm, twentyUm);
-    expect(["strong", "promising"]).toContain(cell.verdict);
-    expect(cell.volumeRatio).toBeGreaterThan(1.5);
+describe("assessUplift: today's real, all-guessed data (no trial required for the uplift itself)", () => {
+  it("gives a sand site a likely uplift from the 5mm cyclone at a coarse membrane", () => {
+    const u = assessUplift(psdForCharacter("sand"), twentyUm, fiveMm);
+    expect(u.category).toBe("likely");
+    expect(u.multiplier.mid).toBeGreaterThan(1.5);
   });
 
-  it("does NOT call everything promising - a clay site at a fine membrane should not be strong", () => {
-    // HANDOFF.md's explicit warning: if this screens as promising everywhere,
+  it("does NOT call everything likely - a clay site at a fine membrane should not reach it", () => {
+    // HANDOFF.md's explicit warning: if this screens as likely everywhere,
     // the model is broken. Clay has almost nothing coarse enough to remove.
-    const cell = assessPair(psdForCharacter("clay"), fiveMm, fiveUm);
-    expect(cell.verdict).not.toBe("strong");
+    const u = assessUplift(psdForCharacter("clay"), fiveUm, fiveMm);
+    expect(u.category).not.toBe("likely");
   });
 
   it("marks confidence low everywhere right now, because every input actually is a guess", () => {
     for (const character of ["sand", "clay"] as const) {
       for (const h of [fiveMm, tenMm]) {
         for (const m of [fiveUm, twentyUm]) {
-          expect(assessPair(psdForCharacter(character), h, m).confidence).toBe("low");
+          expect(assessUplift(psdForCharacter(character), m, h).confidence).toBe("low");
         }
       }
     }
   });
 
   it("names the weak links in the reasoning text, in plain English", () => {
-    const cell = assessPair(psdForCharacter("sand"), fiveMm, fiveUm);
-    expect(cell.reasoning).toMatch(/particle size distribution is a guess/);
-    expect(cell.reasoning).toMatch(/cut sizes are guessed/);
-    expect(cell.reasoning).toMatch(/nominal pore size, not a supplier figure/);
+    const u = assessUplift(psdForCharacter("sand"), fiveUm, fiveMm);
+    expect(u.reasoning).toMatch(/particle size distribution is a guess/);
+    expect(u.reasoning).toMatch(/cut sizes are guessed/);
+    expect(u.reasoning).toMatch(/nominal pore size, not a supplier figure/);
   });
 });
 
-describe("assessPair: mass removed is not fouling removed", () => {
+describe("assessUplift: mass removed is not fouling removed", () => {
   it("removes less fouling load than mass, because the cyclone strips the coarse end first", () => {
-    // The single most important physical claim in this block. Coarse
-    // particles carry mass but little fouling resistance (1/d^2), so
-    // foulingReduction should trail retainedMass's own coarse-removal share.
-    const cell = assessPair(psdForCharacter("sand"), fiveMm, fiveUm);
-    expect(cell.foulingReduction).toBeLessThan(1);
-    expect(cell.foulingRemoved).toBeLessThanOrEqual(cell.foulingLoad);
+    const u = assessUplift(psdForCharacter("sand"), fiveUm, fiveMm);
+    expect(u.foulingReduction).toBeLessThan(1);
+    expect(u.foulingRemoved).toBeLessThanOrEqual(u.foulingLoad);
   });
 
   it("converts a 56% fouling reduction to about 1.5x volume, per Carman-Kozeny", () => {
-    // 1/sqrt(1-0.56) = 1.507..., matching screening-parameters.json's own
-    // worked example exactly.
     expect(1 / Math.sqrt(1 - 0.56)).toBeCloseTo(1.5, 1);
   });
 });
 
-describe("assessPair: the minimum-retained-mass override", () => {
+describe("assessUplift: the minimum-retained-mass override", () => {
   it("calls it marginal, not unlikely-or-better, when there is almost nothing to remove", () => {
-    // Clay barely reaches the 5mm's cut size at all, so retainedMass should
-    // fall under screening-parameters.json's 2% threshold for a fine membrane.
-    const cell = assessPair(psdForCharacter("clay"), fiveMm, fiveUm);
-    if (cell.retainedMass < 0.02) {
-      expect(cell.verdict).toBe("marginal");
-      expect(cell.reasoning).toMatch(/almost nothing there to remove/);
+    const u = assessUplift(psdForCharacter("clay"), fiveUm, fiveMm);
+    if (u.retainedMass < 0.02) {
+      expect(u.category).toBe("marginal");
+      expect(u.reasoning).toMatch(/almost nothing there to remove/);
     }
   });
 });
 
-describe("assessPair: insufficient data is not a negative verdict", () => {
+describe("assessUplift: insufficient data is not a negative category", () => {
   it("returns insufficient-data for a hydrocyclone with no usable cut curve", () => {
     const broken: Hydrocyclone = {
       ...fiveMm,
       cut: { d20Um: 5, d50Um: 5, d90Um: 5 }, // degenerate: no spread at all
     };
-    const cell = assessPair(psdForCharacter("sand"), broken, fiveUm);
-    expect(cell.verdict).toBe("insufficient-data");
-    expect(cell.reasoning).toMatch(/absence of evidence/i);
+    const u = assessUplift(psdForCharacter("sand"), fiveUm, broken);
+    expect(u.category).toBe("insufficient-data");
+    expect(u.reasoning).toMatch(/absence of evidence/i);
   });
 });
 
-describe("assessMatrix", () => {
-  it("produces one cell per hydrocyclone x membrane combination", () => {
-    const matrix = assessMatrix(psdForCharacter("sand"), cyclones, membranes);
-    expect(matrix.length).toBe(cyclones.length * membranes.length);
+describe("assessSite", () => {
+  it("produces one assessment per membrane, each with one uplift per hydrocyclone", () => {
+    const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, trials);
+    expect(assessments.length).toBe(membranes.length);
+    for (const a of assessments) expect(a.uplifts.length).toBe(cyclones.length);
   });
 
-  it("spans more than one verdict across a clay site - it is allowed to say unlikely often", () => {
-    const matrix = assessMatrix(psdForCharacter("clay"), cyclones, membranes);
-    const verdicts = new Set(matrix.map((c) => c.verdict));
-    expect(verdicts.size).toBeGreaterThan(1);
+  it("spans more than one category across a clay site - it is allowed to say unlikely often", () => {
+    const assessments = assessSite(psdForCharacter("clay"), membranes, cyclones, trials);
+    const categories = new Set(assessments.flatMap((a) => a.uplifts.map((u) => u.category)));
+    expect(categories.size).toBeGreaterThan(1);
   });
 
   it("the 5mm always removes at least as much fouling reduction as the 10mm on the same feed", () => {
     // Smaller body, finer cut - the sharper unit should never do worse.
-    const matrix = assessMatrix(psdForCharacter("mixed_mineral"), cyclones, membranes);
-    for (const m of membranes) {
-      const five = matrix.find((c) => c.hydrocycloneId === "5mm" && c.membraneId === m.id)!;
-      const ten = matrix.find((c) => c.hydrocycloneId === "10mm" && c.membraneId === m.id)!;
+    const assessments = assessSite(psdForCharacter("mixed_mineral"), membranes, cyclones, trials);
+    for (const a of assessments) {
+      const five = a.uplifts.find((u) => u.methodId === "5mm")!;
+      const ten = a.uplifts.find((u) => u.methodId === "10mm")!;
       expect(five.foulingReduction).toBeGreaterThanOrEqual(ten.foulingReduction - 1e-9);
     }
   });
+
+  it("gives the one membrane a real trial calibrates (5um) a non-null baseline volume", () => {
+    const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, trials);
+    const five = assessments.find((a) => a.membraneId === "5um")!;
+    expect(five.baselineVolume).not.toBeNull();
+  });
+
+  it("honestly returns insufficient-data (null) baseline volume for a pore size no trial used", () => {
+    const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, trials);
+    const twenty = assessments.find((a) => a.membraneId === "20um")!;
+    expect(twenty.baselineVolume).toBeNull();
+    expect(twenty.baselineReasoning).toMatch(/insufficient data/i);
+  });
 });
 
-describe("assessPair: membrane retention (block 5c) feeds straight into the verdict", () => {
+describe("assessMembrane: membrane retention (block 5c) feeds straight into the uplift", () => {
   it("a supplier-stated retention size changes the confidence, not just the number", () => {
     const populated: Membrane = {
       ...fiveUm,
@@ -116,8 +127,8 @@ describe("assessPair: membrane retention (block 5c) feeds straight into the verd
         retentionUm: 5, rating: "absolute", sourceUrl: "https://example.com", retrievedOn: "2026-01-01", notes: [],
       },
     };
-    const before = assessPair(psdForCharacter("sand"), fiveMm, fiveUm);
-    const after = assessPair(psdForCharacter("sand"), fiveMm, populated);
+    const before = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations).uplifts[0];
+    const after = assessMembrane(psdForCharacter("sand"), populated, [fiveMm], calibrations).uplifts[0];
     expect(before.confidence).toBe("low");
     // Still capped low overall (PSD and cut size are still guesses), but the
     // membrane's own weak link should have dropped out of the reasoning.

@@ -4,12 +4,12 @@ import { useState } from "react";
 import type { ParticleCharacter, CharacterInference } from "@/lib/character";
 import type { Resolution, StationMatch } from "@/lib/resolve";
 import type { Psd } from "@/lib/psd";
-import type { AssessmentCell, Verdict } from "@/lib/assessment";
+import type { Category, MembraneAssessment, UpliftResult } from "@/lib/assessment";
 import type { ScreeningReport } from "@/lib/report";
 
 export interface CharacterData {
   psd: Psd;
-  matrix: AssessmentCell[];
+  assessments: MembraneAssessment[];
   report: ScreeningReport;
 }
 
@@ -40,7 +40,7 @@ interface Screened {
   geologyStatement: string | null;
   characterInference: CharacterInference;
   psd: Psd;
-  matrix: AssessmentCell[];
+  assessments: MembraneAssessment[];
   report: ScreeningReport;
 }
 
@@ -73,31 +73,47 @@ const CHARACTER_LABELS: Record<ParticleCharacter, string> = {
   clay: "Clay",
 };
 
-const VERDICT_STYLE: Record<Verdict, { label: string; className: string }> = {
-  strong: { label: "Works well", className: "cell-strong" },
-  promising: { label: "Works", className: "cell-promising" },
+const CATEGORY_STYLE: Record<Category | "insufficient-data", { label: string; className: string }> = {
+  likely: { label: "Likely", className: "cell-strong" },
   marginal: { label: "Marginal", className: "cell-marginal" },
-  unlikely: { label: "Won't work", className: "cell-unlikely" },
+  unlikely: { label: "Unlikely", className: "cell-unlikely" },
   "insufficient-data": { label: "No data", className: "cell-insufficient" },
 };
+
+const RECOMMENDATION_LABEL: Record<string, string> = {
+  "filter-alone": "Filter alone",
+  "more-replicates": "Run more replicates",
+  pretreatment: "Use pretreatment",
+  "sample-sediment": "Sample sediment first",
+};
+
+interface SelectedDetail {
+  membraneId: string;
+  /** undefined selects the baseline; set selects one method's uplift. */
+  methodId?: string;
+}
 
 export default function ReportView({ hydrocyclones, membranes, byCharacter }: Props) {
   const [query, setQuery] = useState("");
   const [flow, setFlow] = useState<FlowState>({ phase: "idle" });
   const [character, setCharacter] = useState<ParticleCharacter>("sand");
   const [expanded, setExpanded] = useState(false);
-  const [selectedCell, setSelectedCell] = useState<AssessmentCell | null>(null);
+  const [selected, setSelected] = useState<SelectedDetail | null>(null);
 
   const live = flow.phase === "screened" ? flow : null;
-  const { matrix, report } = live ?? byCharacter[character];
+  const { assessments, report } = live ?? byCharacter[character];
 
-  const cellFor = (hydrocycloneId: string, membraneId: string) =>
-    matrix.find((c) => c.hydrocycloneId === hydrocycloneId && c.membraneId === membraneId)!;
+  const assessmentFor = (membraneId: string) => assessments.find((a) => a.membraneId === membraneId)!;
+  const selectedAssessment = selected ? assessmentFor(selected.membraneId) : null;
+  const selectedUplift: UpliftResult | null =
+    selected?.methodId && selectedAssessment
+      ? selectedAssessment.uplifts.find((u) => u.methodId === selected.methodId) ?? null
+      : null;
 
   async function lookUp() {
     if (!query.trim()) return;
     setFlow({ phase: "matching" });
-    setSelectedCell(null);
+    setSelected(null);
     try {
       const res = await fetch(`/api/resolve?q=${encodeURIComponent(query)}`);
       const data = await res.json();
@@ -113,7 +129,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
           geologyStatement: data.geologyStatement,
           characterInference: data.characterInference,
           psd: data.psd,
-          matrix: data.matrix,
+          assessments: data.assessments,
           report: data.report,
         });
         return;
@@ -132,7 +148,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
 
   async function confirmStation(candidate: StationMatch) {
     setFlow({ phase: "screening", stationName: candidate.station.name });
-    setSelectedCell(null);
+    setSelected(null);
     try {
       const s = candidate.station;
       const qs = new URLSearchParams({
@@ -163,7 +179,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
    */
   async function confirmGeologyOnly(bng: { easting: number; northing: number }, matchedOn: string, displayName: string) {
     setFlow({ phase: "screening", stationName: "the mapped point" });
-    setSelectedCell(null);
+    setSelected(null);
     try {
       const qs = new URLSearchParams({
         mode: "geology-only",
@@ -314,7 +330,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
           value={character}
           onChange={(e) => {
             setCharacter(e.target.value as ParticleCharacter);
-            setSelectedCell(null);
+            setSelected(null);
             setFlow({ phase: "idle" });
           }}
         >
@@ -341,56 +357,86 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
       </section>
 
       <section>
-        <h2>Which configurations work</h2>
-        <p className="hint">Click a cell for the full reason behind that verdict.</p>
+        <h2>Per membrane: baseline, uplift, recommendation</h2>
+        <p className="hint">Click a volume or uplift cell for the full reasoning behind it.</p>
         <table className="grid">
           <thead>
             <tr>
-              <th scope="col">Hydrocyclone</th>
-              {membranes.map((m) => (
-                <th scope="col" key={m.id}>
-                  {m.label}
+              <th scope="col">Membrane</th>
+              <th scope="col">Baseline volume (filter alone)</th>
+              {hydrocyclones.map((h) => (
+                <th scope="col" key={h.id}>
+                  {h.name} uplift
                 </th>
               ))}
+              <th scope="col">Recommendation</th>
             </tr>
           </thead>
           <tbody>
-            {hydrocyclones.map((h) => (
-              <tr key={h.id}>
-                <th scope="row">{h.name}</th>
-                {membranes.map((m) => {
-                  const cell = cellFor(h.id, m.id);
-                  const style = VERDICT_STYLE[cell.verdict];
-                  const isSelected =
-                    selectedCell?.hydrocycloneId === h.id && selectedCell?.membraneId === m.id;
-                  return (
-                    <td key={m.id}>
-                      <button
-                        type="button"
-                        className={`cell ${style.className} ${isSelected ? "cell-selected" : ""}`}
-                        onClick={() => setSelectedCell(isSelected ? null : cell)}
-                      >
-                        <span className="cell-verdict">{style.label}</span>
-                        <span className="cell-ratio">
-                          {Number.isFinite(cell.volumeRatio) ? `${cell.volumeRatio.toFixed(2)}x` : "-"}
-                        </span>
-                      </button>
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
+            {membranes.map((m) => {
+              const a = assessmentFor(m.id);
+              const baselineSelected = selected?.membraneId === m.id && !selected.methodId;
+              return (
+                <tr key={m.id}>
+                  <th scope="row">{m.label}</th>
+                  <td>
+                    <button
+                      type="button"
+                      className={`cell ${a.baselineVolume ? "cell-strong" : "cell-insufficient"} ${baselineSelected ? "cell-selected" : ""}`}
+                      onClick={() => setSelected(baselineSelected ? null : { membraneId: m.id })}
+                    >
+                      {a.baselineVolume ? (
+                        <>
+                          <span className="cell-verdict">
+                            {a.baselineVolume.lowMl.toFixed(0)}-{a.baselineVolume.highMl.toFixed(0)} mL
+                          </span>
+                          <span className="cell-ratio">{a.baselineConfidence}</span>
+                        </>
+                      ) : (
+                        <span className="cell-verdict">No data</span>
+                      )}
+                    </button>
+                  </td>
+                  {hydrocyclones.map((h) => {
+                    const u = a.uplifts.find((x) => x.methodId === h.id)!;
+                    const style = CATEGORY_STYLE[u.category];
+                    const isSelected = selected?.membraneId === m.id && selected?.methodId === h.id;
+                    return (
+                      <td key={h.id}>
+                        <button
+                          type="button"
+                          className={`cell ${style.className} ${isSelected ? "cell-selected" : ""}`}
+                          onClick={() => setSelected(isSelected ? null : { membraneId: m.id, methodId: h.id })}
+                        >
+                          <span className="cell-verdict">{style.label}</span>
+                          <span className="cell-ratio">
+                            {Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}
+                          </span>
+                        </button>
+                      </td>
+                    );
+                  })}
+                  <td>{RECOMMENDATION_LABEL[a.recommendation.kind]}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </section>
 
-      {selectedCell && (
+      {selectedUplift && (
         <section className="cell-detail">
           <h3>
-            {hydrocyclones.find((h) => h.id === selectedCell.hydrocycloneId)?.name} +{" "}
-            {membranes.find((m) => m.id === selectedCell.membraneId)?.label}
+            {membranes.find((m) => m.id === selected?.membraneId)?.label} +{" "}
+            {hydrocyclones.find((h) => h.id === selected?.methodId)?.name}
           </h3>
-          <p>{selectedCell.reasoning}</p>
+          <p>{selectedUplift.reasoning}</p>
+        </section>
+      )}
+      {!selectedUplift && selectedAssessment && selected && !selected.methodId && (
+        <section className="cell-detail">
+          <h3>{membranes.find((m) => m.id === selected.membraneId)?.label} - baseline</h3>
+          <p>{selectedAssessment.baselineReasoning}</p>
         </section>
       )}
 
@@ -431,23 +477,25 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
           <table className="config-list">
             <thead>
               <tr>
-                <th>Hydrocyclone</th>
                 <th>Membrane</th>
-                <th>Verdict</th>
-                <th>Volume ratio</th>
+                <th>Method</th>
+                <th>Category</th>
+                <th>Uplift</th>
                 <th>Confidence</th>
               </tr>
             </thead>
             <tbody>
-              {report.configurations.map((c, i) => (
-                <tr key={i}>
-                  <td>{hydrocyclones.find((h) => h.id === c.hydrocycloneId)?.name}</td>
-                  <td>{membranes.find((m) => m.id === c.membraneId)?.label}</td>
-                  <td>{VERDICT_STYLE[c.verdict].label}</td>
-                  <td>{Number.isFinite(c.volumeRatio) ? `${c.volumeRatio.toFixed(2)}x` : "-"}</td>
-                  <td>{c.confidence}</td>
-                </tr>
-              ))}
+              {assessments.flatMap((a) =>
+                a.uplifts.map((u, i) => (
+                  <tr key={`${a.membraneId}-${u.methodId}-${i}`}>
+                    <td>{membranes.find((m) => m.id === a.membraneId)?.label}</td>
+                    <td>{u.methodLabel}</td>
+                    <td>{CATEGORY_STYLE[u.category].label}</td>
+                    <td>{Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}</td>
+                    <td>{u.confidence}</td>
+                  </tr>
+                )),
+              )}
             </tbody>
           </table>
         </section>
