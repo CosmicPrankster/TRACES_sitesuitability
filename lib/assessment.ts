@@ -12,6 +12,13 @@ import {
   type SiteConcentration,
   type VolumeRange,
 } from "./baseline";
+import { findSiteBaselineTrial, findSiteTrial, measuredVolumeRatio } from "./trials";
+
+/** Identifies the exact site/waterbody being screened, for the exact-site trial override below. See lib/resolve.ts's deriveSiteIdentity. */
+export interface SiteIdentity {
+  siteId: string;
+  waterbodyId: string;
+}
 
 /**
  * BLOCK 5d, REBUILT (rebuild phase 1) - the assessment.
@@ -271,10 +278,11 @@ export function assessMembrane(
   hydrocyclones: Hydrocyclone[],
   calibrations: BaselineCalibration[],
   siteConcentration?: SiteConcentration,
+  exactSite?: { trials: Trial[]; identity: SiteIdentity },
 ): MembraneAssessment {
   const { foulingLoad } = foulingLoadForMembrane(psd, membrane);
   const calibration = calibrations.find((c) => c.poreSizeUm === membrane.poreSizeUm);
-  const baselineVolume = predictBaselineVolume(calibration, foulingLoad, siteConcentration?.mgL);
+  let baselineVolume = predictBaselineVolume(calibration, foulingLoad, siteConcentration?.mgL);
 
   // Never an average of the two factors - the weaker one caps it, same
   // discipline as overallConfidence above. A real measured concentration
@@ -285,7 +293,7 @@ export function assessMembrane(
   // caller contract in lib/baseline.ts.
   const psdTier = psdLevel(psd.status); // 0 guessed, 1 field-adjusted, 2 measured
   const concentrationIsReal = Boolean(siteConcentration);
-  const baselineConfidence: Confidence = !baselineVolume
+  let baselineConfidence: Confidence = !baselineVolume
     ? "low"
     : psdTier === 2 && concentrationIsReal
       ? "high"
@@ -293,27 +301,73 @@ export function assessMembrane(
         ? "medium"
         : "low";
 
-  const baselineReasoning = baselineVolume
+  let baselineReasoning = baselineVolume
     ? siteConcentration
       ? `Calibrated against ${calibration!.anchorTrialCount} real bench trials at this membrane's pore size, scaled to this feed's predicted fouling load, using a real measured solids concentration near this site (${siteConcentration.mgL.toFixed(0)} mg/L, ${siteConcentration.source}) rather than the calibration trials' own reference concentration.`
       : `Calibrated against ${calibration!.anchorTrialCount} real bench trials at this membrane's pore size, scaled to this feed's predicted fouling load. Assumes a reference solids concentration (${calibration!.referenceConcentrationMgL.toFixed(0)} mg/L, the calibration trials' own mean) because no measured concentration exists for this site yet - that is the main reason this stays low confidence even with a real calibration behind it.`
     : `No recorded trial used a ${membrane.poreSizeUm} µm filter, so there is no real calibration anchor for an absolute volume at this pore size - insufficient data, not a guessed number. The relative uplift below does not depend on this.`;
 
-  const uplifts = hydrocyclones.map((h) => assessUplift(psd, membrane, h));
+  // Measured beats modelled, always (HANDOFF.md rule 7): a trial run at
+  // THIS EXACT site and waterbody is direct evidence, not an estimate, and
+  // supersedes the general bench-trial calibration above outright - no
+  // averaging the two. This never fires today (every real trials.json
+  // entry has siteId/waterbodyId null), but it is ready for the first one
+  // that does.
+  if (exactSite) {
+    const exactBaselineTrial = findSiteBaselineTrial(
+      exactSite.trials,
+      membrane.poreSizeUm,
+      exactSite.identity.siteId,
+      exactSite.identity.waterbodyId,
+    );
+    if (exactBaselineTrial) {
+      const v = exactBaselineTrial.volumeBeforeMl!;
+      baselineVolume = { lowMl: v, midMl: v, highMl: v };
+      baselineConfidence = "high";
+      baselineReasoning = `Measured directly at this exact site and waterbody (trial "${exactBaselineTrial.id}") with a ${membrane.poreSizeUm} µm filter: ${v.toFixed(0)} mL with no pretreatment. This is a real reading, not a modelled estimate, and supersedes the general bench-trial calibration above.`;
+    }
+  }
+
+  const uplifts = hydrocyclones.map((h) => {
+    const uplift = assessUplift(psd, membrane, h);
+    if (!exactSite) return uplift;
+    const exactUpliftTrial = findSiteTrial(exactSite.trials, h.id, exactSite.identity.siteId, exactSite.identity.waterbodyId);
+    const ratio = exactUpliftTrial ? measuredVolumeRatio(exactUpliftTrial) : null;
+    if (ratio === null) return uplift;
+    const params = loadScreeningParams();
+    return {
+      ...uplift,
+      multiplier: { low: ratio, mid: ratio, high: ratio },
+      category: categorise(ratio, params),
+      confidence: "high" as Confidence,
+      reasoning: `Measured directly at this exact site and waterbody (trial "${exactUpliftTrial!.id}"): ${exactUpliftTrial!.volumeBeforeMl} mL before, ${exactUpliftTrial!.volumeAfterMl} mL after the ${h.name} - a real ${ratio.toFixed(2)}x, not a figure modelled from particle size. This supersedes the grade-efficiency estimate above.`,
+    };
+  });
   const recommendation = recommend(baselineVolume, uplifts, membrane);
 
   return { membraneId: membrane.id, baselineVolume, baselineConfidence, baselineReasoning, uplifts, recommendation };
 }
 
-/** Every membrane's full assessment, for one site's PSD. */
+/**
+ * Every membrane's full assessment, for one site's PSD. `site` identifies
+ * the exact site/waterbody being screened (lib/resolve.ts's
+ * deriveSiteIdentity) - when given, a recorded trial matching it exactly
+ * overrides both the baseline and that hydrocyclone's uplift with the real
+ * measured figure, per assessMembrane's exact-site override above. Omit it
+ * (e.g. the field-update session-only override path, which has no
+ * confirmed station to derive one from) and assessment falls back to the
+ * general calibration/model exactly as before.
+ */
 export function assessSite(
   psd: Psd,
   membranes: Membrane[],
   hydrocyclones: Hydrocyclone[],
   trials: Trial[],
   siteConcentration?: SiteConcentration,
+  site?: SiteIdentity,
 ): MembraneAssessment[] {
   const membranesByPoreSize = new Map(membranes.map((m) => [m.poreSizeUm, m]));
   const calibrations = calibrateBaselines(trials, membranesByPoreSize);
-  return membranes.map((m) => assessMembrane(psd, m, hydrocyclones, calibrations, siteConcentration));
+  const exactSite = site ? { trials, identity: site } : undefined;
+  return membranes.map((m) => assessMembrane(psd, m, hydrocyclones, calibrations, siteConcentration, exactSite));
 }

@@ -296,6 +296,37 @@ export function rankStations(
 }
 
 /* -------------------------------------------------------------------- */
+/* Site identity - for matching an exact-site trial, lib/trials.ts        */
+/* -------------------------------------------------------------------- */
+
+function slugify(text: string): string {
+  return tokens(text).join("-");
+}
+
+/**
+ * Derives the siteId/waterbodyId a confirmed NRFA station corresponds to,
+ * in the same convention data/field-observations.json and data/trials.json
+ * use by hand ("tilford" / "river-wey-tilford") - so a real trial recorded
+ * against this exact station, under this convention, is found by
+ * lib/trials.ts's findSiteTrial/findSiteBaselineTrial without a human
+ * having to hand-match free text. `waterbodyId` is NOT just the river slug:
+ * one river has many reaches, so it is scoped to this station's own place,
+ * the same way a site-specific trial is only ever evidence for that one
+ * reach, never the whole river.
+ *
+ * Reuses scoreStation's own placeTokens technique (station name minus river
+ * tokens) rather than inventing a second way to split "Wey at Tilford".
+ */
+export function deriveSiteIdentity(station: NrfaStation): { siteId: string; waterbodyId: string } {
+  const riverTokens = new Set(tokens(station.river ?? ""));
+  const nameTokens = tokens(station.name ?? "");
+  const placeTokens = nameTokens.filter((t) => !riverTokens.has(t));
+  const siteId = slugify(placeTokens.join(" ")) || slugify(station.name ?? "");
+  const waterbodyId = slugify(`${station.river ?? ""} ${placeTokens.join(" ")}`) || siteId;
+  return { siteId, waterbodyId };
+}
+
+/* -------------------------------------------------------------------- */
 /* The decision                                                          */
 /* -------------------------------------------------------------------- */
 

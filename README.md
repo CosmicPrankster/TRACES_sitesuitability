@@ -7,16 +7,18 @@ that**. Every number carries a confidence and a plain-English reason, and a
 pore size with no real calibration behind it honestly says so instead of
 guessing.
 
-**New here?** [HANDOFF.md](HANDOFF.md) has the core physics and the traps
-already found; [BUILD.md](BUILD.md) has the full build log, including this
-project's live rebuild this session (`BUILD.md`'s "Rebuild phase 0–8"
-sections) — both predate parts of what's below and are due a refresh (see
-[Next steps](#next-steps)).
+**New here?** [HANDOFF.md](HANDOFF.md) has the core physics, the design
+rationale, and the traps already found — refreshed alongside this README, so
+both are current; [BUILD.md](BUILD.md) has the full historical build log,
+including this project's live rebuild (`BUILD.md`'s "Rebuild phase 0–8"
+sections) and predates some of what's below, by design — it's the record of
+how things were probed and built, not a living status doc.
 
 ```bash
 npm install
-npm test                       # 283 tests, no network needed
+npm test                       # 308 tests, no network needed
 npm run dev                    # the web app, http://localhost:3000
+npm run build-query-log        # regenerate data/query-log.json's bench-validation entries
 node --env-file=.env.local scripts/probe-new-sources.mjs   # needs internet + optional API keys
 ```
 
@@ -95,11 +97,11 @@ data/                        everything editable, no code required
   trials.json                  real bench filtration trials  ← the baseline's only calibration
   field-observations.json      what someone saw at a site, hand-curated
   validated-studies.json       real published river sediment figures, for sanity-checking
-  query-log.json               every run, keyed on site + waterbody (schema only — not yet written to)
+  query-log.json               predicted-vs-observed: real bench trials (written by scripts/build-query-log.ts) + real screened sites (none yet)
 
 lib/
   data.ts                      load and validate every file in data/
-  resolve.ts                   "Tilford, River Wey" → one specific NRFA reach
+  resolve.ts                   "Tilford, River Wey" → one specific NRFA reach, + deriveSiteIdentity for trials.ts
   character.ts                 catchment + geology → sand | mixed_mineral | silt | clay, tier-descent orchestrator
   geology.ts                   parse BGS geology at a point
   psd.ts                       character → particle size distribution
@@ -108,7 +110,8 @@ lib/
   separation.ts                hydrocyclone grade-efficiency curve
   assessment.ts                baseline + per-method uplift + recommendation, per membrane
   report.ts                    the useful window + plain-English report sections
-  trials.ts                    exact-site trial lookup — tested, not wired into assessSite/baseline.ts yet
+  validation.ts                leave-one-out predicted-vs-observed checks against data/trials.json
+  trials.ts                    exact-site trial lookup, wired into assessSite/assessMembrane — fires on zero trials today, since none in trials.json has a real site recorded yet
   flags.ts                     algae / organic-inhibition risk, independent of the mineral verdict
   field-update.ts              on-site field reading → a real PSD for this session
   live-site.ts                 the live site-input flow: wires every source above together
@@ -125,9 +128,10 @@ scripts/
   probe.mjs                    test NRFA/BGS/Nominatim live
   probe-new-sources.mjs        test EA/tide/satellite/COSMOS-UK live
   probe-small-catchments.mjs   candidate sources for ungauged catchments (not adopted)
+  build-query-log.ts           regenerate data/query-log.json's bench-validation entries (npx tsx scripts/build-query-log.ts)
   lib/bng.mjs                  British National Grid ↔ WGS84, both directions
 
-tests/            one file per lib/ module, 283 tests total, no network
+tests/            one file per lib/ module, 308 tests total, no network
 ```
 
 ## Running it
@@ -174,14 +178,19 @@ Everything below is real, tracked work, not a vague roadmap — see the
 Notion board ("TRACES Site Suitability tool") for status and the
 plain-language log on each card.
 
-1. **Refresh HANDOFF.md** — it still describes the pre-rebuild tool (the
-   old `volumeRatio` output, the old block-by-block status table). This
-   README and `BUILD.md` are current; `HANDOFF.md` is not, and should not
-   be trusted for current status until it's rewritten.
-2. **Finish the validation loop** — `data/validated-studies.json` is seeded;
-   the other half (extending `query-log.json` into a predicted-vs-observed
-   log, populated from `data/trials.json` and the field-update path) isn't
-   built yet.
+1. ~~**Refresh HANDOFF.md**~~ — done. It now matches the rebuilt tool, with
+   an up-to-date status table, pipeline diagram, and an honest point-by-
+   point check of the 2026-09-27 outside critique against today's code.
+2. ~~**Finish the validation loop**~~ — the bench half is done:
+   `scripts/build-query-log.ts` checks every real bench trial leave-one-out
+   against the model and writes the result to `data/query-log.json`. The
+   result is itself a finding, not a clean pass — see `HANDOFF.md`'s cut-
+   sizes reservation: the baseline volume prediction holds up (10/10 real
+   trials fall inside their predicted range), but the uplift prediction
+   doesn't (0/10) — the guessed hydrocyclone cut sizes under-predict the
+   real benefit by roughly 3–10×. What's left is the "site-run" half: the
+   same check for a real screened site, which needs a real site trial
+   first (next step 7, new).
 3. **Verify the tide-state tier against a real key** — `lib/sources/tide.ts`
    is built and unit-tested against real captured data, but has never run
    end-to-end against the live Admiralty API in this project.
@@ -195,12 +204,19 @@ plain-language log on each card.
    of this is built (`lib/field-update.ts`); a free-text/conversational
    front end on top of it, with AI only ever parsing words into those same
    structured fields, never scoring anything, is not.
-6. **`lib/trials.ts` is dead code** — a tested exact-site-trial lookup from
-   before this rebuild, never wired into `assessSite`/`lib/baseline.ts`.
-   Either wire it in (an exact-site trial should outrank the general
-   bench-trial calibration) or remove it; leaving it unused and untested-
-   against-the-current-model is the one real inconsistency this rewrite
-   found but didn't fix.
+6. ~~**`lib/trials.ts` is dead code**~~ — done. It's wired into
+   `lib/assessment.ts`: a trial recorded against an exact site/waterbody
+   now overrides both the calibrated baseline and that hydrocyclone's
+   uplift outright, per "measured beats modelled, always." It fires on
+   zero trials today, since no entry in `data/trials.json` has a real
+   siteId/waterbodyId yet — the first real site trial, recorded using
+   `lib/resolve.ts`'s `deriveSiteIdentity` convention, is what exercises it.
+7. **A real measured grade-efficiency curve for either hydrocyclone** — now
+   the highest-value thing this project could add, not just a nice-to-have:
+   `data/query-log.json`'s validation loop shows the guessed cut sizes
+   under-predict every real trial's uplift by roughly 3–10×. One real
+   measurement would replace a guess with a fact exactly where it currently
+   matters most.
 
 ## Privacy and disclaimer
 

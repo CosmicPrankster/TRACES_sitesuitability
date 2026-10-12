@@ -148,7 +148,9 @@ export interface Trial {
   notes: string[];
 }
 
-export interface QueryLogEntry {
+/** A real screened site, keyed on siteId + waterbodyId, never the text the user typed. No live writer exists yet - see lib/live-site.ts's architecture notes. */
+export interface SiteRunLogEntry {
+  kind: "site-run";
   siteId: string;
   waterbodyId: string;
   siteName: string;
@@ -158,6 +160,27 @@ export interface QueryLogEntry {
   runs: number;
   lastResult: unknown;
 }
+
+/**
+ * A real bench trial from data/trials.json, checked leave-one-out against
+ * the model (rebuild phase 9's validation loop, see lib/validation.ts).
+ * Written in a batch by scripts/build-query-log.ts, never by the live app.
+ */
+export interface BenchValidationLogEntry {
+  kind: "bench-validation";
+  trialId: string;
+  membraneId: string;
+  hydrocycloneId: string | null;
+  predictedBaselineMl: { lowMl: number; midMl: number; highMl: number } | null;
+  observedBaselineMl: number | null;
+  baselineWithinPredictedRange: boolean | null;
+  predictedUpliftMultiplier: { low: number; mid: number; high: number } | null;
+  observedUpliftMultiplier: number | null;
+  upliftWithinPredictedRange: boolean | null;
+  note: string;
+}
+
+export type QueryLogEntry = SiteRunLogEntry | BenchValidationLogEntry;
 
 /**
  * A real published suspended-sediment figure for a named river (rebuild
@@ -370,12 +393,21 @@ export function validate(data: DataSet): ValidationIssue[] {
   }
 
   /* --- query log --- */
-  const seen = new Set<string>();
+  const seenSiteRuns = new Set<string>();
+  const seenTrialIds = new Set<string>();
   for (const e of data.log) {
-    const key = logKey(e.siteId, e.waterbodyId);
-    if (seen.has(key)) add("query-log", key, "duplicate site + waterbody entry");
-    seen.add(key);
-    if (!e.siteId || !e.waterbodyId) add("query-log", key, "must have both siteId and waterbodyId");
+    if (e.kind === "site-run") {
+      const key = logKey(e.siteId, e.waterbodyId);
+      if (seenSiteRuns.has(key)) add("query-log", key, "duplicate site + waterbody entry");
+      seenSiteRuns.add(key);
+      if (!e.siteId || !e.waterbodyId) add("query-log", key, "must have both siteId and waterbodyId");
+    } else if (e.kind === "bench-validation") {
+      if (seenTrialIds.has(e.trialId)) add("query-log", e.trialId, "duplicate trialId entry");
+      seenTrialIds.add(e.trialId);
+      if (!trialIds.has(e.trialId)) add("query-log", e.trialId, `references unknown trial "${e.trialId}"`);
+    } else {
+      add("query-log", JSON.stringify(e), "entry kind must be site-run | bench-validation");
+    }
   }
 
   /* --- validated studies --- */

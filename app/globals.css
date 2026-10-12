@@ -187,6 +187,50 @@ main {
   align-items: stretch;
 }
 
+.field-update-chat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  width: 100%;
+  padding-bottom: 0.75rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px dashed var(--border);
+}
+
+.field-update-chat label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.field-update-chat textarea {
+  font-size: 0.9rem;
+  padding: 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  resize: vertical;
+}
+
+.field-update-chat button {
+  align-self: flex-start;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.field-update-chat button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
 .field-update-form {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

@@ -54,3 +54,30 @@ export function findSiteTrial(
       t.waterbodyId === waterbodyId,
   );
 }
+
+/**
+ * A recorded trial at this exact site and waterbody whose volumeBeforeMl
+ * is a real baseline reading at this exact membrane pore size - the no-
+ * pretreatment number lib/baseline.ts's calibrated prediction otherwise
+ * stands in for. Not scoped to any one hydrocyclone: the baseline is what
+ * the filter alone does, so any recorded trial at this pore size at this
+ * site is equally good evidence for it, whichever hydrocyclone its uplift
+ * half happened to test. Returns undefined - insufficient data, not a
+ * negative result - when none exists yet, which today is every site:
+ * every real trial.json entry has siteId/waterbodyId null.
+ */
+export function findSiteBaselineTrial(
+  trials: Trial[],
+  poreSizeUm: number,
+  siteId: string,
+  waterbodyId: string,
+): Trial | undefined {
+  return trials.find(
+    (t) =>
+      t.status === "recorded" &&
+      t.siteId === siteId &&
+      t.waterbodyId === waterbodyId &&
+      t.filter?.poreSizeUm === poreSizeUm &&
+      t.volumeBeforeMl! > 0,
+  );
+}

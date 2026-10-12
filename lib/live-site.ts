@@ -2,6 +2,7 @@ import { wgs84ToBng } from "../scripts/lib/bng.mjs";
 import {
   COORDINATE_MATCH_DISTANCE_KM,
   decideResolution,
+  deriveSiteIdentity,
   nearestStations,
   parseCoordinates,
   parseQuery,
@@ -317,6 +318,14 @@ export interface StationScreenSuccess {
   /** Tide state (lib/sources/tide.ts, rebuild phase 5) - undefined for an ordinary inland site, or when no API key is set. See fetchTideState. */
   tideState?: TideState;
   characterInference: CharacterInference;
+  /**
+   * This station's own siteId/waterbodyId (lib/resolve.ts's
+   * deriveSiteIdentity), for matching an exact-site trial (lib/trials.ts).
+   * Only derived here, where a real confirmed NRFA station exists to derive
+   * it from - the no-gauge geology-only fallback (screenPointGeology below)
+   * has no station name to work from, so it has none.
+   */
+  site: { siteId: string; waterbodyId: string };
 }
 
 export type StationScreenResult = StationScreenSuccess | StationScreenFailure;
@@ -370,6 +379,7 @@ export async function screenStation(station: NrfaStation): Promise<StationScreen
     flags,
     tideState,
     characterInference,
+    site: deriveSiteIdentity(station),
   };
 }
 

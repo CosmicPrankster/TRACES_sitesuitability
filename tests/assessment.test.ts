@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { Hydrocyclone, Membrane } from "@/lib/data";
+import type { Hydrocyclone, Membrane, Trial } from "@/lib/data";
 import { loadHydrocyclones, loadMembranes, loadTrials } from "@/lib/data";
 import { psdForCharacter } from "@/lib/psd";
 import { assessMembrane, assessSite, assessUplift } from "@/lib/assessment";
@@ -153,6 +153,68 @@ describe("assessMembrane: a real measured site concentration (rebuild phase 3) i
     const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, trials, siteConcentration);
     const five = assessments.find((a) => a.membraneId === "5um")!;
     expect(five.baselineReasoning).toMatch(/real measured solids concentration/i);
+  });
+});
+
+describe("assessMembrane/assessSite: an exact-site trial (lib/trials.ts) supersedes the model outright", () => {
+  const site = { siteId: "tilford", waterbodyId: "wey-tilford" };
+  const exactBaseline: Trial = {
+    id: "exact-site-baseline",
+    date: "2026-01-01",
+    operator: "test",
+    siteId: "tilford",
+    waterbodyId: "wey-tilford",
+    hydrocycloneId: "5mm",
+    feed: { material: "River water", preparation: "As drawn", concentrationMgL: null, untreatedConcentrationMgL: null, psdMeasured: false, psd: null, note: "" },
+    filter: { poreSizeUm: 5, diameterMm: 47, material: "membrane" },
+    terminalCondition: "Filtered to visible cake formation.",
+    volumeBeforeMl: 200,
+    volumeAfterMl: 500,
+    replicates: 1,
+    status: "recorded",
+    notes: [],
+  };
+
+  it("overrides the baseline volume with the real measured figure, at high confidence", () => {
+    const withExact = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations, undefined, { trials: [exactBaseline], identity: site });
+    expect(withExact.baselineVolume).toEqual({ lowMl: 200, midMl: 200, highMl: 200 });
+    expect(withExact.baselineConfidence).toBe("high");
+    expect(withExact.baselineReasoning).toMatch(/measured directly at this exact site/i);
+  });
+
+  it("overrides that hydrocyclone's uplift with the real measured ratio (500/200 = 2.5x), at high confidence", () => {
+    const withExact = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations, undefined, { trials: [exactBaseline], identity: site });
+    const uplift = withExact.uplifts.find((u) => u.methodId === "5mm")!;
+    expect(uplift.multiplier).toEqual({ low: 2.5, mid: 2.5, high: 2.5 });
+    expect(uplift.confidence).toBe("high");
+    expect(uplift.category).toBe("likely");
+    expect(uplift.reasoning).toMatch(/measured directly at this exact site/i);
+  });
+
+  it("does not touch a different hydrocyclone's uplift, since the trial only tested the 5mm", () => {
+    const withExact = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm, tenMm], calibrations, undefined, { trials: [exactBaseline], identity: site });
+    const withoutExact = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm, tenMm], calibrations);
+    const tenExact = withExact.uplifts.find((u) => u.methodId === "10mm")!;
+    const tenPlain = withoutExact.uplifts.find((u) => u.methodId === "10mm")!;
+    expect(tenExact).toEqual(tenPlain);
+  });
+
+  it("leaves everything exactly as before when no trial matches this site/waterbody", () => {
+    const withExact = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations, undefined, { trials: [exactBaseline], identity: { siteId: "somewhere-else", waterbodyId: "another-river" } });
+    const withoutExact = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations);
+    expect(withExact).toEqual(withoutExact);
+  });
+
+  it("assessSite threads the site identity through to every membrane", () => {
+    const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, [...trials, exactBaseline], undefined, site);
+    const five = assessments.find((a) => a.membraneId === "5um")!;
+    expect(five.baselineVolume).toEqual({ lowMl: 200, midMl: 200, highMl: 200 });
+  });
+
+  it("finds nothing against today's real trials.json, which has no site/waterbody recorded yet", () => {
+    const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, trials, undefined, site);
+    const five = assessments.find((a) => a.membraneId === "5um")!;
+    expect(five.baselineReasoning).not.toMatch(/measured directly at this exact site/i);
   });
 });
 

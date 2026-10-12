@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { Trial } from "@/lib/data";
 import { loadTrials } from "@/lib/data";
-import { findSiteTrial, measuredVolumeRatio } from "@/lib/trials";
+import { findSiteBaselineTrial, findSiteTrial, measuredVolumeRatio } from "@/lib/trials";
 
 // A synthetic recorded trial, built in-memory - not written to
 // data/trials.json, which holds only genuine field data. This is the shape
@@ -93,5 +93,32 @@ describe("findSiteTrial", () => {
 
   it("finds nothing at all against today's real trials.json", () => {
     expect(findSiteTrial(loadTrials(), "4mm", "tilford", "river-wey-tilford")).toBeUndefined();
+  });
+});
+
+describe("findSiteBaselineTrial", () => {
+  const trial = recordedTrial();
+
+  it("finds a recorded trial at this exact site, waterbody and pore size, regardless of hydrocyclone", () => {
+    const found = findSiteBaselineTrial([trial], 5, "tilford", "river-wey-tilford");
+    expect(found?.id).toBe("synthetic-001");
+  });
+
+  it("does not match a different pore size", () => {
+    expect(findSiteBaselineTrial([trial], 10, "tilford", "river-wey-tilford")).toBeUndefined();
+  });
+
+  it("does not match a different site or waterbody", () => {
+    expect(findSiteBaselineTrial([trial], 5, "some-other-site", "river-wey-tilford")).toBeUndefined();
+    expect(findSiteBaselineTrial([trial], 5, "tilford", "some-other-waterbody")).toBeUndefined();
+  });
+
+  it("ignores a matching trial that is still awaiting data", () => {
+    const pending = recordedTrial({ status: "awaiting-data", volumeBeforeMl: null, volumeAfterMl: null });
+    expect(findSiteBaselineTrial([pending], 5, "tilford", "river-wey-tilford")).toBeUndefined();
+  });
+
+  it("finds nothing at all against today's real trials.json", () => {
+    expect(findSiteBaselineTrial(loadTrials(), 5, "tilford", "river-wey-tilford")).toBeUndefined();
   });
 });

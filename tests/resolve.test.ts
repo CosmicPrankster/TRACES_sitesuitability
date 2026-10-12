@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decideResolution,
+  deriveSiteIdentity,
   nearestStations,
   parseCoordinates,
   parseQuery,
@@ -60,6 +61,24 @@ describe("splitting the query", () => {
 
   it("drops noise words but keeps real ones", () => {
     expect(tokens("The River at Tilford")).toEqual(["river", "tilford"]);
+  });
+});
+
+describe("deriveSiteIdentity: for matching an exact-site trial, lib/trials.ts", () => {
+  it("splits 'Wey at Tilford' into the river and the place, same convention the hand-curated data uses", () => {
+    const station = STATIONS.find((s) => s.name === "Wey at Tilford")!;
+    expect(deriveSiteIdentity(station)).toEqual({ siteId: "tilford", waterbodyId: "wey-tilford" });
+  });
+
+  it("gives two reaches of the same river genuinely different identities", () => {
+    const tilford = deriveSiteIdentity(STATIONS.find((s) => s.name === "Wey at Tilford")!);
+    const weybridge = deriveSiteIdentity(STATIONS.find((s) => s.name === "Wey at Weybridge")!);
+    expect(tilford).not.toEqual(weybridge);
+  });
+
+  it("handles a multi-word river name ('Motray Water at St Michaels')", () => {
+    const station = STATIONS.find((s) => s.name === "Motray Water at St Michaels")!;
+    expect(deriveSiteIdentity(station)).toEqual({ siteId: "st-michaels", waterbodyId: "motray-water-st-michaels" });
   });
 });
 

@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "probe": "node scripts/probe.mjs",
+    "build-query-log": "tsx scripts/build-query-log.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit",
     "dev": "next dev",
@@ -16,6 +17,7 @@
     "@types/node": "22.10.5",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.5",
+    "tsx": "^4.23.15",
     "typescript": "5.9.3",
     "vitest": "3.2.7"
   },

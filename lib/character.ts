@@ -216,8 +216,10 @@ export function inferCharacter(
       reasoning.push(
         `${Math.round((high / bedrockTotal) * 100)} % of the catchment sits on high-permeability ` +
           "bedrock — sandstone, chalk or greensand. These weather to sand-grade quartz, and " +
-          "water infiltrates rather than running off, so the suspended load tends to be coarser " +
-          "and lighter than in an impermeable catchment.",
+          "water infiltrates rather than running off, so the suspended load tends to be coarser, " +
+          "and present at a lower overall concentration, than in an impermeable catchment " +
+          "(\"lighter\" here means less loaded, not lower-density grains - quartz is not lighter " +
+          "than clay minerals).",
       );
       evidence.push({ field: "high-perm-bedrock", value: high, means: "permeable, sand-yielding bedrock" });
     } else if (low / bedrockTotal > 0.5) {
@@ -334,8 +336,11 @@ export function inferCharacter(
       // Agreement nudges, it does not dominate: one polygon is not a catchment.
       coarseness += 0.15 * Math.sign(geology.coarseness);
       reasoning.push(
-        `${geology.statement} That agrees with the catchment properties, which is the more ` +
-          "reassuring outcome: two independent datasets pointing the same way.",
+        `${geology.statement} That agrees with the catchment properties, which is somewhat ` +
+          "reassuring - though worth keeping in proportion: this is one mapped polygon at the " +
+          "abstraction point agreeing with a catchment-wide reading, not two independently " +
+          "collected datasets. It nudges the result; it does not confirm it the way a real " +
+          "measurement would.",
       );
     } else if (geologyAgrees === false) {
       reasoning.push(
@@ -380,7 +385,7 @@ export function inferCharacter(
   wouldChangeThis.push(
     "A measured particle-size distribution on a raw water sample would replace this inference " +
       "entirely, and is the single most valuable measurement available.",
-    "A settle-bottle test on a raw sample would confirm or contradict it in an afternoon: rapid " +
+    "A settle test on a raw sample would confirm or contradict it in an afternoon: rapid " +
       "settling of gritty material indicates a coarse fraction a hydrocyclone can act on, while a " +
       "haze that persists for hours indicates fines it cannot.",
   );
@@ -431,7 +436,7 @@ export function inferCharacterFromGeologyOnly(geology: GeologyCorroboration): Ch
       "A measured particle-size distribution on a raw water sample would replace this inference " +
         "entirely, and matters more here than at a gauged site, precisely because there is no " +
         "catchment data to fall back on.",
-      "A settle-bottle test on a raw sample would confirm or contradict it in an afternoon: rapid " +
+      "A settle test on a raw sample would confirm or contradict it in an afternoon: rapid " +
         "settling of gritty material indicates a coarse fraction a hydrocyclone can act on, while a " +
         "haze that persists for hours indicates fines it cannot.",
       "The geology reading is for one point; upstream catchment character can differ from what is " +

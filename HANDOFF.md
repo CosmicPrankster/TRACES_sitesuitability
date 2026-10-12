@@ -3,19 +3,28 @@
 For whoever picks this up next, human or agent. Read this before touching
 anything.
 
+**This file was rewritten 2026-10-12** to match the rebuilt tool (see
+`README.md`'s "Next steps", which used to flag this file as stale — it no
+longer is). `BUILD.md` stays the historical probe/build log; this file stays
+the living design-philosophy doc: why things are built the way they are, the
+traps already found, and what's still open.
+
 ## What this is
 
 A screening tool. You give it a site and a waterbody — "Tilford, River Wey" —
-and it tells you which hydrocyclone and membrane combinations are worth
-investigating, and why.
+and it tells you, per membrane pore size, **how much water the filter alone
+is likely to pass before it blinds**, and **how much more each pretreatment
+method would buy on top of that**. See `README.md` for a real worked example
+and the full input-hierarchy table; this file goes underneath that.
 
 ## The question it exists to answer
 
 > Does removing what the hydrocyclone can remove meaningfully extend how long
 > the membrane runs before it blinds?
 
-"Meaningfully" is **about 1.5× the filterable volume** versus no pre-treatment.
-That is the user's threshold, set in `data/screening-parameters.json`.
+"Meaningfully" is **about 1.5× the filterable volume** versus the baseline
+(filter alone). That threshold, and the marginal/likely category cutoffs, are
+set in `data/screening-parameters.json`, not hard-coded.
 
 ## The one piece of physics that governs everything
 
@@ -35,57 +44,81 @@ much larger than the volume target:
 | 2.0× | **75 %** |
 
 Halving the fouling load buys about 1.4×, not 2×. If you take one thing from
-this document, take that.
+this document, take that. It is exactly as true of the rebuilt baseline+
+uplift output as it was of the old `volumeRatio` — the physics never
+changed, only how it's presented and what feeds it.
 
 ## Where the project stands
 
-| Block | Status | Where |
-|---|---|---|
-| 1 Data files | done, tested | `data/*.json`, `lib/data.ts` |
-| 2 Source probe | done, run live | `scripts/probe.mjs` |
-| 3 Site resolution | done, tested | `lib/resolve.ts` |
-| 4 Character inference | done, validated on 5 rivers | `lib/character.ts`, `lib/geology.ts` |
-| **5a PSD** | **done, tested** | `lib/psd.ts` |
-| 5b Separation | **in progress - fitted curve only, no trial override yet** | `lib/separation.ts` |
-| 5c Membrane retention | not started | same |
-| 5d Assessment | not started | same |
-| 5e Report | not started | same |
-| 6 UI | not started | — |
-| 7 AI layer | not started | — |
+The output model and the input pipeline were both rebuilt this project
+(2026-10, "rebuild phases 0–9" in `BUILD.md`). In one line: the old tool gave
+one falsely-precise `volumeRatio` multiplier per hydrocyclone × membrane
+cell, inferred almost entirely from NRFA bedrock catchment properties; the
+rebuilt tool gives a **baseline filterable volume range** (filter alone,
+calibrated against real bench trials) plus a **per-pretreatment-method
+uplift range** on top of it, each with its own confidence, fed by a
+hierarchy of sources that stops at the first tier with usable data. See
+`README.md`'s "How a prediction gets built" table for the full tier list and
+each tier's live/untested/dropped status — it is not repeated here to avoid
+the two files drifting apart again.
 
-`npm test` — 123 tests, no network, no API keys.
-`node scripts/probe.mjs "Tilford, River Wey"` — needs internet.
+`npm test` — 297 tests, no network, no API keys.
+`npx tsc --noEmit` / `npx next build` — both clean.
+`node --env-file=.env.local scripts/probe-new-sources.mjs` — needs internet,
+optional API keys for the tide and satellite tiers.
 
-**5b so far:** `lib/separation.ts` fits a grade-efficiency curve
-`G(d) = (d/d50)^m / (1 + (d/d50)^m)` to the guessed d20/d50/d90 cut sizes in
-`data/hydrocyclones.json`, with `m` fitted against d20 and d90 and averaged.
-That is the whole increment. It deliberately does NOT yet read
-`data/trials.json` to override the fitted curve when real before/after
-evidence exists — that needs a judgement call (what counts as "a comparable
-feed material") that should be confirmed before it is coded, so it is left
-for the next step rather than guessed at. See the "NOT YET BUILT" block at
-the foot of `lib/separation.ts`.
-
-**The specification for 5b–5e is written out in plain English at the bottom of
-`lib/psd.ts`.** Start there.
+**Still genuinely open**, not yet built:
+- The chat/conversational layer on top of `lib/field-update.ts` (free-text
+  intake parsed into the same structured fields the form already takes — AI
+  parses, never scores).
+- The satellite-turbidity data-query shape (only the OAuth2 step against
+  Copernicus is proven live; the query itself is a labelled guess in
+  `scripts/probe-new-sources.mjs`).
+- The tide tier (`lib/sources/tide.ts`) has never run end-to-end against a
+  real Admiralty API key.
+- `data/query-log.json`'s "site-run" half (a real screened site's prediction
+  checked against reality) - the "bench-validation" half, checked against
+  every real trial in `data/trials.json`, is built (`scripts/build-query-
+  log.ts`) and its result is itself worth reading: see the cut-sizes
+  reservation below.
 
 ## How the pipeline fits together
 
 ```
 "Tilford, River Wey"
    │
-   ├─ lib/resolve.ts     split the query, anchor on the SETTLEMENT,
-   │                     match NRFA station names ("Wey at Tilford"),
-   │                     propose the reach and ask the user to confirm
+   ├─ lib/resolve.ts        split the query, anchor on the SETTLEMENT,
+   │                        match NRFA station names ("Wey at Tilford"),
+   │                        propose the reach and ask the user to confirm
    │
-   ├─ NRFA               catchment properties: bedrock permeability,
-   │                     base flow index, land cover              [UK-wide]
-   ├─ BGS WMS            bedrock + superficial geology at the point
+   ├─ lib/live-site.ts      wires every source below together, stopping at
+   │                        the first tier with usable data (see
+   │                        lib/character.ts's worthCorroboratingWithGeology
+   │                        for the one deliberate exception: a near-
+   │                        boundary result is corroborated one tier deeper)
+   │     ├─ on-site field reading (lib/field-update.ts)    tier 1, session-only
+   │     ├─ EA Water Quality Archive (lib/sources/water-quality.ts)  tier 2
+   │     ├─ NRFA catchment properties (lib/character.ts)  tier 3
+   │     ├─ BGS point geology (lib/geology.ts)             tier 4, corroborates only
+   │     ├─ tide state (lib/sources/tide.ts)               confidence context, estuaries
+   │     └─ algae/inhibition flags (lib/flags.ts)          independent of the mineral verdict
    │
-   ├─ lib/character.ts   catchment + geology → sand | mixed_mineral | silt | clay
-   ├─ lib/psd.ts         character → assumed particle size distribution   ← 5a
+   ├─ lib/psd.ts            character → assumed particle size distribution
+   │                        (superseded by a field or trial-measured PSD
+   │                        wherever one exists)
    │
-   └─ [5b–5e, not built] → hydrocyclone × membrane matrix
+   ├─ lib/baseline.ts       real-trial-calibrated absolute filterable volume
+   │                        per membrane pore size - "insufficient data"
+   │                        where no trial calibrates that pore size
+   ├─ lib/trials.ts         an EXACT-site trial (same siteId+waterbodyId)
+   │                        overrides the calibrated baseline/uplift outright
+   │                        - wired into lib/assessment.ts, fires on zero
+   │                        trials today since none in data/trials.json has
+   │                        a real site recorded yet
+   ├─ lib/separation.ts     hydrocyclone grade-efficiency curve
+   ├─ lib/retention.ts      membrane pore size → effective retention
+   ├─ lib/assessment.ts     baseline + per-method uplift + recommendation
+   └─ lib/report.ts         the useful window + plain-English report sections
 ```
 
 ## Rules this project runs on
@@ -93,24 +126,36 @@ the foot of `lib/separation.ts`.
 These were learned the hard way. The first version of this repository looked
 finished and was useless — it produced a confident screening for every site
 from placeholder values, because the data lookups it depended on had never
-actually been run. It was deleted and restarted.
+actually been run. It was deleted and restarted. They held up through the
+2026-10 rebuild unchanged — the rebuild is evidence they work, not a reason
+to relax them.
 
-1. **A source that has not been proven to respond is not built on.** Run
-   `scripts/probe.mjs` first. Five candidate sources were dropped for failing
-   on two real sites.
+1. **A source that has not been proven to respond is not built on.** Every
+   new tier this project has ever added (EA Water Quality, tide, satellite)
+   was probed live with `scripts/probe*.mjs` before a line of production
+   code was written against it. Satellite turbidity still has no production
+   code for exactly this reason — only the OAuth2 step is proven.
 2. **Never report an empty response as a success.** The v1 probe did, and it
    hid the single most important failure for days.
-3. **Every number carries its status** — `guessed`, `measured`, `published` —
-   in the data itself, not in a comment. A guess must never be silently
-   promoted to a fact.
+3. **Every number carries its status** — `guessed`, `field-adjusted`,
+   `measured` — in the data itself, not in a comment. A guess must never be
+   silently promoted to a fact. (Widened from two tiers to three this
+   rebuild, for a field reading with an assumed spread — see `lib/psd.ts`'s
+   `Psd.status`.)
 4. **Confidence is the weakest link in the chain.** A guessed cut size caps the
    whole verdict at low confidence however good the geology is.
 5. **A disagreement between sources is reported, never averaged away.** It is
-   information. See the Spey case below.
+   information. See the Spey case below, and the grain-card/settle-test
+   disagreement handling in `lib/field-update.ts`.
 6. **Absence of data is not a negative verdict.** "insufficient data" is a
-   distinct outcome from "unlikely".
+   distinct outcome from "unlikely". This now spans the baseline volume, the
+   algae/inhibition flags, and the validated-studies entries (the River Dee
+   has none, honestly).
 7. **Measured beats modelled, always.** A filtration trial in `data/trials.json`
-   supersedes every estimate in this repository.
+   supersedes every estimate in this repository — and since this rebuild,
+   an exact-site trial supersedes even the general bench-trial calibration
+   (`lib/trials.ts`'s `findSiteBaselineTrial`/`findSiteTrial`, wired into
+   `lib/assessment.ts`).
 
 ## Things that will bite you
 
@@ -138,97 +183,174 @@ rocks" was being read as limestone, silently discarding the clay half.
 
 **Suspended load is finer than bed material.** A sandy riverbed does not mean
 sandy suspended solids. This is the likeliest source of over-optimism in
-`data/particle-sizes.json`.
+`data/particle-sizes.json` — and the same trap `lib/field-update.ts` warns
+about explicitly when a grain-card reading comes back "gravel": that is
+almost always bed material, not the suspended load, and the reading should
+be retaken.
+
+**EA Water Quality Archive point types matter.** Only `"FRESHWATER -
+UNSPECIFIED"` and `"FRESHWATER - RIVERS"` point types are usable
+(`lib/sources/water-quality.ts`'s `RIVER_POINT_TYPES`) — the Archive carries
+many other monitoring purposes at the same API shape that are not ordinary
+river points, and including them would attribute readings to the wrong kind
+of site.
+
+**A "less than" censored water-quality result is used at its upper bound.**
+Conservative on purpose: it can only ever make the predicted baseline *lower*
+than the true figure, never let the tool overclaim a site it has under-read.
 
 ## Reservations — be honest about these with the user
 
-**The cut sizes are guesses.** Both entries in `data/hydrocyclones.json` are
-marked `guessed`. Until one real grade-efficiency measurement exists, the matrix
-shows *the shape of the argument*, not a prediction. It is reliable for
-**relative** comparisons — which membrane sizes look better, where 4 mm beats
-10 mm — and not for absolute verdicts.
+**The cut sizes are guesses, and the validation loop now shows by how much
+that matters.** Both entries in `data/hydrocyclones.json` are marked
+`guessed`. `scripts/build-query-log.ts` (`lib/validation.ts`) checks every
+real recorded bench trial's measured uplift against what the model predicts
+from that same trial's own measured feed PSD, using the 10mm hydrocyclone's
+guessed grade-efficiency curve - and the model is consistently, substantially
+too conservative: predicted uplift sits around 1.2-1.9x across all 10 real
+trials, while the real measured uplift is 3.7x-15x. **Every single trial's
+real result falls outside the model's predicted range** - see
+`data/query-log.json`. This does not mean the physics is wrong (the baseline
+side of the same check, which doesn't depend on the guessed cut sizes, is
+accurate - the real baseline volume falls inside the leave-one-out predicted
+range for all 10 trials). It means the guessed d20/d50/d90 cut sizes in
+`data/hydrocyclones.json` assume a coarser cut than the real 10mm unit
+achieves on this feed. Until a real grade-efficiency measurement replaces
+the guess, the uplift is reliable for **relative** comparisons - which
+membrane sizes look better, where 4 mm beats 10 mm - and not for absolute
+verdicts, and should be read as a floor on the real benefit, not a ceiling.
+(An exact-site trial, when one exists, bypasses this entirely — see rule 7
+above.)
 
-**Character → PSD is the weakest link.** Weaker than the geology, weaker than
-the cut sizes. Every verdict inherits it.
+**Character → PSD is the weakest link, when nothing better exists.** Weaker
+than the geology, weaker than the cut sizes. A field reading
+(`lib/field-update.ts`) or a real EA Water Quality Archive concentration
+narrows this; absent both, every verdict still inherits it.
 
 **The addressable window may be narrow.** Small hydrocyclones cut somewhere
 around 5–20 µm. Below that they do little. So the product plausibly works for
 coarse-solids waters at coarse membrane ratings, and plausibly does not for
 clay-dominated waters or fine ratings. **The screening should be allowed to
-return "unlikely" often.** If it returns "promising" everywhere, it is broken —
-that was the failure mode of the first version.
+return "unlikely" often.** If it returns "likely" everywhere, it is broken —
+that was the failure mode of the first version, and `tests/assessment.test.ts`
+has an explicit test guarding against it.
 
 **Floc density is not modelled.** Cohesive clay flocs entrain water, so their
 effective density is far below the mineral density, and centrifugal separation
 depends on density difference rather than size alone. This should make clay
 worse than size alone predicts. It is deliberately left out rather than
-invented: it needs a defensible source, and none has been checked.
+invented: it needs a defensible source, and none has been checked
+(`data/screening-parameters.json`'s `flocDensityPenalty`, `applied: false`).
+The Mekong entry in `data/validated-studies.json` is a real, citable case
+where this matters — a feed concentrated enough to flocculate, which this
+tool's hydrocyclone math does not represent.
 
 **Bench data is not site data.** Crushed aquarium soil characterises the
-hydrocyclone, not any river.
+hydrocyclone, not any river. Every entry in `data/trials.json` says so in its
+own `feed.note`.
 
 **The model assumes the cyclone never makes fouling worse.** In
-`lib/assessment.ts`, `foulingReduction` is clamped to `[0, 1]` and
-`volumeRatio = 1/sqrt(1-foulingReduction)`, so the floor is always 1x - "no
-benefit," never "worse than untreated." Literature raises at least four real
-mechanisms by which pretreatment could speed up fouling instead: shear in the
-vortex/apex breaking friable flocs or algal colonies into finer fragments
-than the natural feed (fouling resistance goes as 1/d², so breakage can
-manufacture fouling potential, not just fail to remove it); loss of a
-"filter aid" effect, where stripping the coarse fraction leaves a fine-skewed
-cake that packs denser per gram than the natural mixed-size feed would have
-(the model sums `massFraction / d²` independently per size bin, which can't
-represent this); weaker shear-induced back-transport at the membrane if this
-ever runs crossflow, since coarse particles self-scour a crossflow surface
-far more effectively than fines (back-transport scales roughly with particle
-size cubed) - not applicable to the dead-end bench trials run so far, but
-worth remembering if crossflow is ever tried; and shear releasing NOM or
+`lib/assessment.ts`, `foulingReduction` is clamped to `[0, 1]`, so the floor
+on a method's uplift is always 1× ("no benefit"), never "worse than
+untreated." Literature raises at least four real mechanisms by which
+pretreatment could speed up fouling instead: shear in the vortex/apex
+breaking friable flocs or algal colonies into finer fragments than the
+natural feed (fouling resistance goes as 1/d², so breakage can manufacture
+fouling potential, not just fail to remove it); loss of a "filter aid"
+effect, where stripping the coarse fraction leaves a fine-skewed cake that
+packs denser per gram than the natural mixed-size feed would have (the model
+sums `massFraction / d²` independently per size bin, which can't represent
+this); weaker shear-induced back-transport at the membrane if this ever runs
+crossflow, since coarse particles self-scour a crossflow surface far more
+effectively than fines (back-transport scales roughly with particle size
+cubed) - not applicable to the dead-end bench trials run so far, but worth
+remembering if crossflow is ever tried; and shear releasing NOM or
 biopolymer-bound organics into solution, causing irreversible/pore-blocking
 fouling that this model - which only ever tracks particulate PSD mass - does
 not represent at all. None of these are built in: no measured basis exists
 yet for how much worse, from which mechanism, at which site, and a guessed
-fouling *penalty* would be worse than the current honest silence on it. Left
-here so a future reader does not have to rediscover the gap from scratch.
+fouling *penalty* would be worse than the current honest silence on it.
+`lib/flags.ts`'s algae/inhibition flags are adjacent to this gap but do not
+close it: they flag a risk independently, they don't quantify a fouling-
+worsening mechanism.
 
-## Outside critique (2026-09-27) — not yet actioned
+## Outside critique (2026-09-27) — status after the rebuild
 
-An external reviewer raised eight points against the tool. None of these have
-been investigated or fixed yet — recorded here verbatim so they aren't lost
-before that happens in a separate pass.
+An external reviewer raised eight points against the pre-rebuild tool. Most
+are now addressed; three residual wording/naming issues the rebuild missed
+were fixed alongside this file. None of the eight needed a second review
+round to confirm — each is checked against the actual current code below,
+not assumed fixed because a phase touched the area.
 
-1. **Suspended vs bedload.** The tool infers a sand-grade suspended load from
-   bedrock. At base flow the suspended load is mostly silt and clay regardless
-   of geology, and sand moves near the bed. Geology is a better predictor of
-   storm-flow and bed material than of what's in a mid-channel sample on a
-   calm day.
-2. **"Two independent datasets agree."** Alluvium is mapped as clay, silt,
-   sand and gravel, so it doesn't really confirm "sand." That wording
-   overstates confidence.
-3. **"Coarser and lighter."** In the catchment explanation, "lighter" is
-   ambiguous: it could mean lower concentration or lower density. Quartz isn't
-   lighter than clay minerals.
-4. **No validation.** Show predicted vs observed multipliers for the six
-   field sites, noting the tool was built after them. The Irthing (sandstone,
-   5 µm) result is a useful check.
-5. **Unsupported thresholds.** The ≥10 mm/72 h rainfall trigger and the
-   medium/high confidence labels need a stated basis, even if it's
-   "provisional, from X."
-6. **Organics and colloids.** The tool only models mineral sediment, but the
-   project's own report says organics and colloids foul filters regardless of
-   the hydrocyclone. At minimum, flag sites with high organic or agricultural
-   load — high arable percentage, or a wastewater treatment works nearby — as
-   uncertain.
-7. **Naming clash.** "Settle-bottle proxy (from known geology)" shares a name
-   with the field settle test. Rename it, for example "inferred settling
-   class," to avoid confusion.
-8. **Output uncertainty.** Show a range or confidence band per cell rather
-   than a single multiplier, consistent with the tool's "very rough guess"
-   caveat.
+1. **Suspended vs bedload.** *Largely addressed.* The EA Water Quality
+   Archive tier (`lib/sources/water-quality.ts`) now supplies a real
+   measured suspended-solids concentration where one exists nearby, ranked
+   ahead of bedrock/catchment inference in the hierarchy (README's input
+   table). Where no measured concentration exists, bedrock/catchment
+   evidence is still used, and the baseline reasoning now explicitly frames
+   it as context about storm-flow and bed material, not a calm-day
+   suspended-load measurement.
+2. **"Two independent datasets agree."** *Fixed.* `lib/character.ts`'s
+   agreement reasoning no longer uses that phrase - it now says explicitly
+   that one mapped BGS polygon agreeing with a catchment-wide reading is a
+   nudge, not two independently collected datasets, and does not confirm
+   the result the way a real measurement would.
+3. **"Coarser and lighter."** *Fixed.* The high-permeability-bedrock
+   reasoning in `lib/character.ts` now says "coarser, and present at a lower
+   overall concentration" and spells out that "lighter" means less loaded,
+   not lower-density grains - quartz is not lighter than clay minerals.
+4. **No validation.** *Addressed, and the result is itself a finding.*
+   `data/validated-studies.json` (rebuild phase 8) seeds real published
+   suspended-sediment figures for named rivers (Thames, Mersey, Mekong),
+   each with its own citation, and honestly records no figure found for the
+   Dee rather than inventing one. `scripts/build-query-log.ts`
+   (`lib/validation.ts`, rebuild phase 9) now does what this point
+   specifically asked for - predicted vs observed, leave-one-out against
+   this project's own 10 real bench trials - and the result is not a clean
+   pass: the baseline volume prediction holds up (10/10 trials fall inside
+   their predicted range), but the uplift prediction does not (0/10) - see
+   the cut-sizes reservation above. This is the validation loop doing its
+   job, not the validation loop failing. What's still missing is the same
+   check for a real SITE trial (not a bench trial) - none exists yet, since
+   none in `data/trials.json` has a real siteId/waterbodyId.
+5. **Unsupported thresholds.** *Partially moot, partially addressed.* The
+   old ≥10 mm/72 h rainfall trigger this point referred to no longer exists
+   - it was part of the pre-rebuild output surface, deleted in the rebuild,
+   not carried forward. The medium/high confidence labels now have an
+   explicit, documented basis: confidence is always the WEAKEST input in the
+   chain (never an average - see rule 4 above), computed from named,
+   comment-documented tiers (`psdLevel`, `cutLevel`, `membraneLevel` in
+   `lib/assessment.ts`) rather than a single unexplained number.
+6. **Organics and colloids.** *Addressed.* `lib/flags.ts` (rebuild phase 4)
+   flags algae risk (season + cropland as a nutrient-runoff proxy) and
+   organic-inhibition risk (peat as a dissolved-organic-carbon proxy)
+   independently of the mineral verdict, exactly as the critique asked -
+   never blended into the sand/silt/clay category.
+7. **Naming clash.** *Fixed.* The pre-rebuild "settle-bottle proxy" output
+   label this point referred to no longer exists (replaced by the rebuilt
+   output surface). A residual inconsistency was found and fixed while
+   writing this update: `lib/character.ts`'s desk-based recommendation to
+   run a field test said "settle-bottle test," while the live field-update
+   path (`lib/field-update.ts`) calls the same real test a "settle test" -
+   now consistent throughout.
+8. **Output uncertainty.** *Addressed.* This was rebuild phase 1's whole
+   premise: every baseline and uplift is a range with a named confidence
+   tier, never a single point multiplier. See README's worked example.
 
 ## What would most improve this, in order
 
-1. **One filtration trial** — raw water and hydrocyclone overflow through the
-   same membrane, volumes compared. It measures the target quantity directly
-   instead of inferring it through three layers of assumption.
-2. **One measured grade-efficiency curve** for either hydrocyclone.
-3. **A measured PSD** at any site, to check `data/particle-sizes.json`.
+1. **One measured grade-efficiency curve for either hydrocyclone.** No
+   longer just "would be nice" - the validation loop now shows the guessed
+   10mm curve under-predicts every real trial's uplift by roughly 3-10x.
+   This is the single highest-value piece of real data this project could
+   add next.
+2. **A filtration trial recorded against a real siteId/waterbodyId.** Every
+   trial in `data/trials.json` today has both set to `null` - bench data
+   only. `lib/trials.ts`'s exact-site override is wired into
+   `lib/assessment.ts` and tested, but has never fired against real data.
+   One real site trial, recorded with the siteId/waterbodyId
+   `lib/resolve.ts`'s `deriveSiteIdentity` would derive for that station,
+   would be the first time it does.
+3. **A real site-run entry in the validation loop.** The bench-validation
+   half (`scripts/build-query-log.ts`) is built and run; the site-run half
+   needs #2 above to exist first.

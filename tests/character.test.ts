@@ -109,7 +109,7 @@ describe("the two real sites come out differently", () => {
   it("names what would overturn the inference", () => {
     for (const r of [wey, motray]) {
       expect(r.wouldChangeThis.join(" ")).toMatch(/particle-size distribution/i);
-      expect(r.wouldChangeThis.join(" ")).toMatch(/settle-bottle/i);
+      expect(r.wouldChangeThis.join(" ")).toMatch(/settle test/i);
     }
   });
 
@@ -186,7 +186,10 @@ describe("geology corroboration", () => {
       statement: "At this point BGS maps superficial deposits of Alluvium, over Folkestone Formation bedrock (Sandstone).",
     })!;
     expect(r.reasoning.join(" ")).toMatch(/agrees with the catchment properties/i);
-    expect(r.reasoning.join(" ")).toMatch(/two independent datasets/i);
+    // Deliberately NOT "two independent datasets" - one mapped BGS polygon
+    // agreeing with a catchment-wide reading is weaker than that phrase
+    // implies (outside critique #2); the reasoning now says so explicitly.
+    expect(r.reasoning.join(" ")).toMatch(/not two independently collected datasets/i);
     expect(r.confidence).toBe("medium");
   });
 
@@ -371,7 +374,7 @@ describe("inferCharacterFromGeologyOnly - the no-NRFA-gauge fallback", () => {
 
   it("still points to a raw sample as the thing that would most improve it", () => {
     const prose = inferCharacterFromGeologyOnly(SPEY_GEOLOGY).wouldChangeThis.join(" ");
-    expect(prose).toMatch(/settle-bottle test/i);
+    expect(prose).toMatch(/settle test/i);
     expect(prose).toMatch(/particle-size distribution/i);
   });
 

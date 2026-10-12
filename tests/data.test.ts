@@ -178,8 +178,14 @@ describe("trials", () => {
 });
 
 describe("query log", () => {
-  it("starts empty", () => {
-    expect(loadQueryLog()).toEqual([]);
+  it("has a bench-validation entry for every real recorded trial, and no site-run entries yet", () => {
+    // No real site has ever been trialled against a siteId/waterbodyId
+    // (see data/trials.json), so there is nothing yet for the live app to
+    // have logged a site-run for - this stays true until that changes.
+    const log = loadQueryLog();
+    const trials = loadTrials();
+    expect(log.every((e) => e.kind === "bench-validation")).toBe(true);
+    expect(log.length).toBe(trials.length);
   });
 
   it("keys on site plus waterbody, not on typed text", () => {
@@ -269,14 +275,34 @@ describe("the validator actually rejects bad data", () => {
     expect(problems(h)).toMatch(/populated but has no sourceUrl/);
   });
 
-  it("catches two log entries for the same site and waterbody", () => {
+  it("catches two site-run log entries for the same site and waterbody", () => {
     const h = structuredClone(good);
     const entry = {
-      siteId: "tilford", waterbodyId: "river-wey-tilford", siteName: "T",
+      kind: "site-run" as const, siteId: "tilford", waterbodyId: "river-wey-tilford", siteName: "T",
       waterbodyName: "W", firstScreenedAt: "", lastScreenedAt: "", runs: 1, lastResult: null,
     };
     h.log = [entry, structuredClone(entry)];
     expect(problems(h)).toMatch(/duplicate site \+ waterbody/);
+  });
+
+  it("catches two bench-validation entries for the same trialId", () => {
+    const h = structuredClone(good);
+    const entry = h.log.find((e) => e.kind === "bench-validation")!;
+    h.log = [entry, structuredClone(entry)];
+    expect(problems(h)).toMatch(/duplicate trialId/);
+  });
+
+  it("catches a bench-validation entry pointing at a trial that does not exist", () => {
+    const h = structuredClone(good);
+    const entry = h.log.find((e) => e.kind === "bench-validation")!;
+    h.log = [{ ...entry, trialId: "no-such-trial" }];
+    expect(problems(h)).toMatch(/unknown trial "no-such-trial"/);
+  });
+
+  it("catches a log entry with no recognised kind", () => {
+    const h = structuredClone(good);
+    h.log = [{ foo: "bar" } as never];
+    expect(problems(h)).toMatch(/entry kind must be site-run \| bench-validation/);
   });
 
   it("catches a real-confidence study with no citation", () => {

@@ -96,7 +96,7 @@ export async function GET(request: Request) {
   const membranes = loadMembranes();
   const trials = loadTrials();
   const psd = psdForCharacter(screened.characterInference.character);
-  const assessments = assessSite(psd, membranes, hydrocyclones, trials, screened.siteConcentration);
+  const assessments = assessSite(psd, membranes, hydrocyclones, trials, screened.siteConcentration, screened.site);
   const report = buildReport(psd, assessments, membranes);
 
   return NextResponse.json({

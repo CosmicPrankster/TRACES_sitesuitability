@@ -151,6 +151,8 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
   const [settleHazyHours, setSettleHazyHours] = useState("");
   const [turbidityTube, setTurbidityTube] = useState("");
   const [siteNote, setSiteNote] = useState("");
+  const [chatMessage, setChatMessage] = useState("");
+  const [chatIntake, setChatIntake] = useState<{ parsedFrom: string[]; warnings: string[] } | null>(null);
 
   const live = flow.phase === "screened" ? flow : null;
   const fieldResult = fieldUpdate.phase === "done" ? fieldUpdate.result : null;
@@ -196,8 +198,49 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
     }
   }
 
+  /**
+   * The chat/conversational layer (rebuild phase 9) on top of the same
+   * /api/field-update endpoint the structured form above posts to - free
+   * text, PARSED server-side (lib/chat-intake.ts) into the exact same
+   * structured fields, never scored itself. `chatIntake` shows what was
+   * and wasn't understood, so a partial or failed parse is visible, not
+   * silently dropped.
+   */
+  async function submitChatMessage() {
+    if (!chatMessage.trim()) return;
+    setFieldUpdate({ phase: "submitting" });
+    setChatIntake(null);
+    try {
+      const res = await fetch("/api/field-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: chatMessage.trim() }),
+      });
+      const data = await res.json();
+      setChatIntake(data.chatIntake ?? null);
+      if (!data.ok) {
+        setFieldUpdate({ phase: "no-evidence", message: data.message });
+        return;
+      }
+      setFieldUpdate({
+        phase: "done",
+        result: {
+          psd: data.psd,
+          fieldReasoning: data.fieldReasoning,
+          additionalContext: data.additionalContext,
+          assessments: data.assessments,
+          report: data.report,
+        },
+      });
+      setSelected(null);
+    } catch {
+      setFieldUpdate({ phase: "failed", message: "Request failed - the server did not respond." });
+    }
+  }
+
   function clearFieldUpdate() {
     setFieldUpdate({ phase: "idle" });
+    setChatIntake(null);
   }
 
   const assessmentFor = (membraneId: string) => assessments.find((a) => a.membraneId === membraneId)!;
@@ -471,6 +514,35 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
           reading replaces the desk-based guess for this report, deterministically, no site visit
           needed to rebuild anything.
         </label>
+        <div className="field-update-chat">
+          <label htmlFor="field-chat">
+            Or describe what you saw, in your own words
+            <textarea
+              id="field-chat"
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              placeholder={'e.g. "looks like fine sand, cleared within 10 minutes"'}
+              rows={2}
+            />
+          </label>
+          <button type="button" onClick={submitChatMessage} disabled={!chatMessage.trim() || fieldUpdate.phase === "submitting"}>
+            {fieldUpdate.phase === "submitting" ? "Parsing..." : "Parse & apply"}
+          </button>
+          <p className="hint">
+            Parsed into the same fields as the form below, never scored directly - AI (here, a
+            deterministic parser) only ever reads words into structured fields; see HANDOFF.md.
+          </p>
+          {chatIntake && (
+            <div className="hint">
+              {chatIntake.parsedFrom.map((line, i) => (
+                <p key={`parsed-${i}`}>Understood: {line}</p>
+              ))}
+              {chatIntake.warnings.map((line, i) => (
+                <p key={`warn-${i}`}>Not understood: {line}</p>
+              ))}
+            </div>
+          )}
+        </div>
         <div className="field-update-form">
           <label htmlFor="grain-card">
             Grain card match
