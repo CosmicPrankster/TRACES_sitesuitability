@@ -120,28 +120,66 @@ await get("EA water-quality api-docs page", "https://environment.data.gov.uk/wat
 // matched the earlier guess: base is just /water-quality (no /id/ prefix),
 // the path is singular "/sampling-point" (not plural "/sampling-points"),
 // and the geo filter params are latitude/longitude/radius (not lat/long/dist).
-await get("EA water-quality OpenAPI spec", "https://environment.data.gov.uk/water-quality/api/swagger");
+const wqSwagger = await get("EA water-quality OpenAPI spec", "https://environment.data.gov.uk/water-quality/api/swagger");
+// Phase 3 needs to know what this API can actually serve BEFORE guessing a
+// measurement/reading endpoint - printing the real path list directly to
+// the console (not just into the probe-results file) so it's visible in
+// whatever gets pasted back.
+if (wqSwagger?.paths && typeof wqSwagger.paths === "object") {
+  console.log(`     ${c.dim}real paths in the spec:${c.reset}`);
+  for (const path of Object.keys(wqSwagger.paths)) console.log(`       ${c.dim}${path}${c.reset}`);
+}
 // The 400 named the exact fix: this API only serves application/ld+json or
 // application/geo+json, not plain application/json.
-const wqPoints = await get("sampling points near site (corrected Accept header)",
-  `https://environment.data.gov.uk/water-quality/sampling-point?latitude=${lat}&longitude=${lon}&radius=10&limit=5`,
+// Widened from the original 10 km/limit 5 - that search found only
+// sewage-discharge/effluent points near Tilford, not ambient river
+// monitoring. A wider net is more likely to turn up the type we actually
+// want, rather than concluding from one unlucky radius that it doesn't
+// exist nearby.
+const wqPoints = await get("sampling points near site (wider radius)",
+  `https://environment.data.gov.uk/water-quality/sampling-point?latitude=${lat}&longitude=${lon}&radius=25&limit=20`,
   { accept: "application/geo+json" });
 // Real response shape (confirmed from an actual body, not guessed): JSON-LD
 // Hydra Collection - {"type":"hydra:Collection","member":[...]} - not the
 // "items" or "features" this originally assumed.
-if (wqPoints?.member?.length || wqPoints?.items?.length || wqPoints?.features?.length) {
-  const items = wqPoints.member ?? wqPoints.items ?? wqPoints.features;
-  const p = items[0];
-  console.log(`     ${c.dim}nearest type: ${p.properties?.type ?? "?"}${c.reset}`);
-  // All 5 nearby points were sewage-discharge/effluent monitoring, not
-  // ambient river stations - a different slice of this dataset than what
-  // we want. Listing the real type codes to find the right filter, rather
-  // than assume this near-Tilford result generalises everywhere.
-  await get("sampling-point-type codelist",
-    "https://environment.data.gov.uk/water-quality/codelist/sampling-point-type?limit=50",
+const wqItems = wqPoints?.member ?? wqPoints?.items ?? wqPoints?.features ?? [];
+if (wqItems.length) {
+  console.log(`     ${c.dim}${wqItems.length} point(s) within 25 km - type breakdown:${c.reset}`);
+  const byType = {};
+  for (const p of wqItems) {
+    const t = p.properties?.type ?? p.type ?? "?";
+    byType[t] = (byType[t] ?? 0) + 1;
+  }
+  for (const [t, n] of Object.entries(byType)) console.log(`       ${c.dim}${n}x ${t}${c.reset}`);
+
+  // Follow the first point's own linked-data identity, whatever field it
+  // actually carries it in - printing the raw keys rather than assuming
+  // "@id" so a wrong guess here is visible immediately, not silent.
+  const first = wqItems[0];
+  const selfUri = first["@id"] ?? first.id ?? first.properties?.["@id"] ?? first.properties?.id ?? null;
+  console.log(`     ${c.dim}first point's own keys: ${Object.keys(first).join(", ")}${c.reset}`);
+  if (first.properties) console.log(`     ${c.dim}first point's properties keys: ${Object.keys(first.properties).join(", ")}${c.reset}`);
+  if (selfUri) {
+    await get("first sampling point's own linked-data resource", selfUri, { accept: "application/ld+json" });
+  } else {
+    console.log(`     ${c.yellow}no obvious self-link field on the point - can't follow it to find readings${c.reset}`);
+  }
+
+  // Real type codes, to confirm which one(s) mean "ambient river/
+  // watercourse" rather than sewage-discharge/effluent, rather than
+  // guessing from the label text alone.
+  const codelist = await get("sampling-point-type codelist",
+    "https://environment.data.gov.uk/water-quality/codelist/sampling-point-type?limit=200",
     { accept: "application/geo+json" });
+  const codeItems = codelist?.member ?? codelist?.items ?? [];
+  if (codeItems.length) {
+    console.log(`     ${c.dim}${codeItems.length} known sampling-point types:${c.reset}`);
+    for (const t of codeItems) {
+      console.log(`       ${c.dim}${t.notation ?? t.id ?? "?"} - ${t.label ?? t.name ?? "?"}${c.reset}`);
+    }
+  }
 } else {
-  console.log(`     ${c.yellow}none within 10 km, or the endpoint shape has changed${c.reset}`);
+  console.log(`     ${c.yellow}none within 25 km either, or the endpoint shape has changed${c.reset}`);
 }
 console.log();
 
