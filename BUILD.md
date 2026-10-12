@@ -129,17 +129,30 @@ lat/lon/radius - both accepting a `determinand` code filter. The
 the real codes for suspended solids and turbidity can be looked up by name
 instead of guessed or scraped from a full listing.
 
-One dead end, recorded so it isn't re-tried: `/codelist/sampling-point-type
-?limit=200` came back **403 from an Azure Application Gateway**, not from
-the API itself (the body is generic Azure HTML, not a FastAPI validation
-error) - likely a WAF rule, not a real limit (the spec's own schema allows
-up to 250). Not blocking: the freshwater type is already proven from real
-point data above, so this codelist was only needed for a short notation
-code this tier doesn't actually require.
+One dead end, recorded so it isn't re-tried as a content problem: a broad
+codelist request came back **403 from an Azure Application Gateway**, not
+from the API itself (the body is generic Azure HTML, not a FastAPI
+validation error). The narrower, targeted follow-up confirmed it's real
+data behind it - the full freshwater-type codelist (9 real codes, including
+`F6` "FRESHWATER - RIVERS" alongside the already-known `FZ` "FRESHWATER -
+UNSPECIFIED" - both now accepted by the probe's point filter) and the
+turbidity determinand codelist (6 real codes, `0068` "Turbidity" being the
+obvious first choice) both came back real and 200 on a second run.
 
-Waiting on one more live run (extended probe, same workflow) to confirm the
-real determinand codes and the real shape of an actual observation record
-before building `lib/sources/water-quality.ts` against it.
+The gateway block turned out to be **flaky, not content-based**: in the
+second run, the same kind of request (suspended-solids determinand lookup,
+then the actual observation fetch) 403'd on one call and succeeded on
+another moments later, with no pattern tying the failure to the request's
+own content - looks like a bursty rate limiter at the gateway, not
+anything wrong with the query. The probe now retries specifically that
+signature (Azure gateway 403, body containing "Azure-Application-Gateway")
+up to twice more with a short backoff - and ONLY that signature, so a real
+403 from the API itself is never silently retried away.
+
+Still waiting on one real observation record's actual shape (field names
+for the determinand, value, unit, date) before building
+`lib/sources/water-quality.ts` - the retry should get past the gateway
+flakiness on the next run.
 
 ### Two findings that mattered more than the pass/fail list
 

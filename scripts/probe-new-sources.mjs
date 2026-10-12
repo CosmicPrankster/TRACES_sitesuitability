@@ -84,6 +84,42 @@ async function get(name, url, { accept = "application/json", headers = {} } = {}
   } finally { clearTimeout(timer); }
 }
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * True only for the specific Azure Application Gateway block seen against
+ * the EA water-quality host (BUILD.md's "rebuild phase 3" section) - a
+ * generic HTML 403 that never reaches the API itself. Narrow on purpose:
+ * this must never swallow a REAL 403 from the API (bad auth, a genuinely
+ * forbidden resource) as if it were this infra quirk.
+ */
+function isAzureGatewayBlock(entry) {
+  return entry?.httpStatus === 403 && typeof entry?.body === "string" && entry.body.includes("Azure-Application-Gateway");
+}
+
+/**
+ * Retries ONLY the Azure-gateway block above, with a short backoff - every
+ * other failure (timeout, a real 4xx/5xx, a shape change) is reported as-is
+ * on the first attempt, same as get(). Seen twice now against this host in
+ * the same single script run (two different endpoints, one succeeding
+ * moments after the other failed) - looks like a bursty rate limiter at the
+ * gateway, not a problem with the request itself.
+ */
+async function getWithRetry(name, url, opts = {}, attempts = 3, delayMs = 2000) {
+  for (let i = 1; i <= attempts; i++) {
+    const label = i === 1 ? name : `${name} (retry ${i - 1})`;
+    const body = await get(label, url, opts);
+    if (body !== null) return body;
+    const last = results[results.length - 1];
+    if (!isAzureGatewayBlock(last) || i === attempts) return null;
+    console.log(`     ${c.dim}Azure gateway block, not the API itself - retrying in ${delayMs} ms${c.reset}`);
+    await sleep(delayMs);
+  }
+  return null;
+}
+
 function skip(name, reason) {
   results.push({ name, outcome: "skipped", reason });
   console.log(`  ${c.yellow}skip${c.reset} ${name} ${c.dim}${reason}${c.reset}`);
@@ -156,11 +192,14 @@ if (wqItems.length) {
   // label string ("FRESHWATER - UNSPECIFIED" for an ordinary river/stream
   // point, as opposed to "GROUNDWATER - ..." or "SEWAGE - ..."/"TRADE
   // DISCHARGES - ..." for the others) - not a short code, and not under
-  // "@id"/"id" as first guessed. Filtering on that confirmed label here,
-  // client-side, rather than chasing the sampling-point-type codelist's
-  // own short notation (that broad fetch 403'd from an Azure gateway last
-  // run - see below - and isn't needed: this label is already proven).
-  const freshwaterPoints = wqItems.filter((p) => p.properties?.type === "FRESHWATER - UNSPECIFIED");
+  // "@id"/"id" as first guessed. A LATER RUN pulled the real codelist
+  // (below) and found "FRESHWATER - UNSPECIFIED" (FZ) sits alongside a more
+  // specific "FRESHWATER - RIVERS" (F6) - neither points nearby happened to
+  // use F6, but another site's might, so both are accepted here. Lakes/
+  // ponds/canals/land-drains/bathing-water are real codes too but a
+  // different hydrology question - excluded on purpose, not an oversight.
+  const RIVER_TYPES = new Set(["FRESHWATER - UNSPECIFIED", "FRESHWATER - RIVERS"]);
+  const freshwaterPoints = wqItems.filter((p) => RIVER_TYPES.has(p.properties?.type));
   console.log(`     ${c.dim}${freshwaterPoints.length} of those are ordinary freshwater (river/stream) points${c.reset}`);
   for (const p of freshwaterPoints) {
     console.log(`       ${c.dim}${p.properties?.notation} - ${p.properties?.name}${c.reset}`);
@@ -180,10 +219,10 @@ if (wqItems.length) {
   // The determinand codelist supports the same prefLabel contains-search -
   // confirming the real codes for suspended solids and turbidity rather
   // than guessing at a notation.
-  const suspendedSolids = await get("determinand codelist, filtered to suspended solids",
+  const suspendedSolids = await getWithRetry("determinand codelist, filtered to suspended solids",
     "https://environment.data.gov.uk/water-quality/codelist/determinand?prefLabel=suspended%20solids&limit=10",
     { accept: "application/ld+json" });
-  const turbidity = await get("determinand codelist, filtered to turbidity",
+  const turbidity = await getWithRetry("determinand codelist, filtered to turbidity",
     "https://environment.data.gov.uk/water-quality/codelist/determinand?prefLabel=turbidity&limit=10",
     { accept: "application/ld+json" });
 
@@ -202,16 +241,23 @@ if (wqItems.length) {
   // a third probing round, if the codelist lookups above succeeded.
   const codes = [ssCode, turbCode].filter(Boolean).join(",");
   const targetPoint = freshwaterPoints[0]?.properties?.notation;
-  if (targetPoint && codes) {
-    await get("real observations for a freshwater point, filtered to those determinands",
-      `https://environment.data.gov.uk/water-quality/sampling-point/${targetPoint}/observation?determinand=${codes}&limit=20`,
-      { accept: "application/ld+json" });
-  } else if (targetPoint) {
-    // Still worth seeing the shape of a real observation, unfiltered, even
-    // if the determinand lookup above didn't resolve a code.
-    await get("real observations for a freshwater point (unfiltered)",
-      `https://environment.data.gov.uk/water-quality/sampling-point/${targetPoint}/observation?limit=10`,
-      { accept: "application/ld+json" });
+  if (targetPoint) {
+    let observations = null;
+    if (codes) {
+      observations = await getWithRetry("real observations for a freshwater point, filtered to those determinands",
+        `https://environment.data.gov.uk/water-quality/sampling-point/${targetPoint}/observation?determinand=${codes}&limit=20`,
+        { accept: "application/ld+json" });
+    }
+    // Falls back to unfiltered whenever the filtered call didn't pan out -
+    // either no determinand code resolved above, or the filtered fetch
+    // itself failed even after retrying the Azure gateway block. Seeing
+    // the real shape of ANY observation is worth more than giving up
+    // because one specific filtered call didn't come through this round.
+    if (!observations) {
+      await getWithRetry("real observations for a freshwater point (unfiltered fallback)",
+        `https://environment.data.gov.uk/water-quality/sampling-point/${targetPoint}/observation?limit=10`,
+        { accept: "application/ld+json" });
+    }
   } else {
     console.log(`     ${c.yellow}no freshwater point in range to fetch real observations for${c.reset}`);
   }
