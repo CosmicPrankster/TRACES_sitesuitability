@@ -58,6 +58,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 0.5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 63.48,
         "psdMeasured": true,
+        "psd": { "d20Um": 7.66, "d50Um": 22.8, "d90Um": 72.7 },
+        "untreatedConcentrationMgL": 460,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
@@ -95,6 +97,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 0.5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 18.7901,
         "psdMeasured": true,
+        "psd": { "d20Um": 7.66, "d50Um": 22.8, "d90Um": 72.7 },
+        "untreatedConcentrationMgL": 460,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
@@ -133,6 +137,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 1 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 71.44,
         "psdMeasured": true,
+        "psd": { "d20Um": 6.45, "d50Um": 26.2, "d90Um": 63.5 },
+        "untreatedConcentrationMgL": 940,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
@@ -170,6 +176,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 1 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 19.646,
         "psdMeasured": true,
+        "psd": { "d20Um": 6.45, "d50Um": 26.2, "d90Um": 63.5 },
+        "untreatedConcentrationMgL": 940,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
@@ -208,6 +216,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 2 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 195.3,
         "psdMeasured": true,
+        "psd": { "d20Um": 7.77, "d50Um": 22.5, "d90Um": 71.4 },
+        "untreatedConcentrationMgL": 1860,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
@@ -245,6 +255,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 2 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 47.8485,
         "psdMeasured": true,
+        "psd": { "d20Um": 7.77, "d50Um": 22.5, "d90Um": 71.4 },
+        "untreatedConcentrationMgL": 1860,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
@@ -283,6 +295,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 903.35,
         "psdMeasured": true,
+        "psd": { "d20Um": 9.86, "d50Um": 27.7, "d90Um": 80.3 },
+        "untreatedConcentrationMgL": 4450,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
@@ -320,6 +334,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 5 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 186.9935,
         "psdMeasured": true,
+        "psd": { "d20Um": 9.86, "d50Um": 27.7, "d90Um": 80.3 },
+        "untreatedConcentrationMgL": 4450,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
@@ -358,6 +374,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 10 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 2026.44,
         "psdMeasured": true,
+        "psd": { "d20Um": 15.9, "d50Um": 31.1, "d90Um": 96.8 },
+        "untreatedConcentrationMgL": 8660,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {
@@ -395,6 +413,8 @@
         "preparation": "Soil pellets crushed by hand before mixing to a nominal 10 g/L dose. Actual concentration reaching the membrane in this specific run is given in concentrationMgL, not the nominal dose.",
         "concentrationMgL": 350.5741,
         "psdMeasured": true,
+        "psd": { "d20Um": 15.9, "d50Um": 31.1, "d90Um": 96.8 },
+        "untreatedConcentrationMgL": 8660,
         "note": "A bench feed (crushed soil pellets in water), not a natural water. Useful for characterising the hydrocyclone(s) themselves; NOT evidence about any particular site until a natural feed is run."
       },
       "filter": {

@@ -79,7 +79,7 @@ export function normInv(p: number): number {
 }
 
 /** z-score of the 90th percentile. */
-const Z90 = 1.2815515655446004;
+export const Z90 = 1.2815515655446004;
 
 /* ------------------------------------------------------------------ */
 /* The distribution                                                    */

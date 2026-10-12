@@ -103,8 +103,35 @@ export interface Trial {
   feed: {
     material: string | null;
     preparation: string | null;
+    /**
+     * The concentration reaching the membrane IN THIS SPECIFIC RUN - i.e.
+     * after whatever treatment this trial recorded (or no treatment, for a
+     * trial with no pretreatment stage at all). For a trial that records
+     * both a before and after volume, this is the AFTER value - it is NOT
+     * the baseline concentration, which can differ (treatment removes
+     * mass). See untreatedConcentrationMgL for that.
+     */
     concentrationMgL: number | null;
+    /**
+     * The untreated feed's own concentration - what volumeBeforeMl was
+     * actually measured against. Distinct from concentrationMgL because
+     * they can be, and in this project's recorded trials are, different
+     * numbers: two trials sharing one baseline (a single-pass run and a
+     * cascade run on the same raw feed) share this value but have
+     * different concentrationMgL, since the cascade's extra stage removes
+     * more mass before the membrane sees it.
+     */
+    untreatedConcentrationMgL: number | null;
     psdMeasured: boolean;
+    /**
+     * The feed's own measured d20/d50/d90, structured - promoted out of
+     * notes[] (where it was recorded as free text) so it can be computed
+     * on: calibrating an absolute baseline volume against a real fouling
+     * load needs the real PSD, not just a "psdMeasured: true" flag. null
+     * where psdMeasured is true but the numbers were never promoted, or
+     * where no PSD was measured at all.
+     */
+    psd: { d20Um: number; d50Um: number; d90Um: number } | null;
     note: string;
   };
   filter: {
@@ -303,6 +330,12 @@ export function validate(data: DataSet): ValidationIssue[] {
       }
       if (!t.feed?.material?.trim()) {
         add("trials", t.id, "recorded trial must state feed.material");
+      }
+    }
+    if (t.feed?.psd) {
+      const { d20Um, d50Um, d90Um } = t.feed.psd;
+      if (!(d20Um > 0 && d50Um > 0 && d90Um > 0) || !(d20Um < d50Um && d50Um < d90Um)) {
+        add("trials", t.id, "feed.psd must have positive, increasing d20Um < d50Um < d90Um");
       }
     }
   }
