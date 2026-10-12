@@ -374,6 +374,42 @@ field reasoning and site note in the UI.
 16 new tests (`tests/field-update.test.ts`). 277/277 tests pass,
 `tsc --noEmit` and `next build` both clean.
 
+### Rebuild phase 8: validation loop (in progress - studies half only)
+
+`data/validated-studies.json` seeded with real published suspended-sediment
+figures for the Thames, Dee, Mersey and Mekong, found via live web search
+this session (not recalled from training data) - Thames estuary 150-600
+mg/L (modelled, Baugh & Littlewood 2005) and 97-4720 mg/L (real 1969-1983
+field surveys, poor-OCR source); Mersey Narrows 32-213 mg/L (Prandle et al.
+1990); Mekong 400-4000 mg/L with a real ~400 mg/L flocculation threshold
+(Le et al. 2020) plus a separate dam-driven-change figure. **The Dee got no
+figure** - several real studies exist but no search surfaced a specific
+mg/L value, so that entry honestly records `confidence: "insufficient-data"`,
+`suspendedSedimentMgL: null`, same rule as everywhere else in this project.
+
+Every entry's `confidence` is a plain low/medium/high/insufficient-data
+rating with a `confidenceReason` explaining it (several of these are
+secondary citations, not the original paper's own tables), and a
+`comparisonNote` reading it against this tool's own 3274 mg/L calibration
+reference (`lib/baseline.ts`, the mean of this project's 10 real bench
+trials). The real finding: this tool's reference concentration sits well
+above typical UK river/estuary figures found (Thames, Mersey) but
+comfortably inside the Mekong's real flocculation-prone range - a bench-
+trial calibration built for lab testing purposes assumes conditions closer
+to a tropical high-sediment river than an ordinary UK one, worth knowing
+when reading this tool's confidence claims for a UK site.
+
+New `ValidatedStudy` type + `loadValidatedStudies()` + validator rules in
+`lib/data.ts` (a real figure needs a citation and source URL; insufficient-
+data needs neither - enforced, not just conventional). 8 new tests.
+283/283 tests pass, `tsc --noEmit` and `next build` both clean.
+
+**Not done yet**: the query-log schema extension into a predicted-vs-
+observed log (populating it from `data/trials.json` and the field-update
+path) - the plan's other half of this phase. Left here deliberately,
+mid-phase, per an explicit instruction to stop and report rather than
+push on past phase 8.
+
 ### Two findings that mattered more than the pass/fail list
 
 **The v1 probe reported empty responses as "ok".** That hid the BGS failure

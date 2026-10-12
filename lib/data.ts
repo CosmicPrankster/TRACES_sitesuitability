@@ -159,6 +159,29 @@ export interface QueryLogEntry {
   lastResult: unknown;
 }
 
+/**
+ * A real published suspended-sediment figure for a named river (rebuild
+ * phase 8, "validation loop") - external reference context for this
+ * tool's own calibration, not a new calibration input. `suspendedSedimentMgL`
+ * is null exactly when `confidence` is "insufficient data" - a real gap in
+ * what a search could find, not a guessed number standing in for one.
+ */
+export interface ValidatedStudy {
+  id: string;
+  river: string;
+  country: string;
+  location: string;
+  citation: string | null;
+  foundVia: string;
+  sourceUrl: string | null;
+  suspendedSedimentMgL: { low: number; high: number } | null;
+  measurementKind: string | null;
+  confidence: "insufficient-data" | "low" | "medium" | "high";
+  confidenceReason: string;
+  note: string;
+  comparisonNote: string | null;
+}
+
 /* -------------------------------------------------------------------- */
 
 export function loadHydrocyclones(): Hydrocyclone[] {
@@ -183,6 +206,10 @@ export function loadQueryLog(): QueryLogEntry[] {
   return readJson<{ entries: QueryLogEntry[] }>("query-log.json").entries;
 }
 
+export function loadValidatedStudies(): ValidatedStudy[] {
+  return readJson<{ studies: ValidatedStudy[] }>("validated-studies.json").studies;
+}
+
 /** The log key. Never the text the user typed. */
 export function logKey(siteId: string, waterbodyId: string): string {
   return `${siteId}::${waterbodyId}`;
@@ -202,9 +229,10 @@ export interface DataSet {
   observations: FieldObservation[];
   trials: Trial[];
   log: QueryLogEntry[];
+  validatedStudies: ValidatedStudy[];
 }
 
-/** Reads all five files from disk. */
+/** Reads all six files from disk. */
 export function loadAll(): DataSet {
   return {
     hydrocyclones: loadHydrocyclones(),
@@ -212,6 +240,7 @@ export function loadAll(): DataSet {
     observations: loadFieldObservations(),
     trials: loadTrials(),
     log: loadQueryLog(),
+    validatedStudies: loadValidatedStudies(),
   };
 }
 
@@ -347,6 +376,34 @@ export function validate(data: DataSet): ValidationIssue[] {
     if (seen.has(key)) add("query-log", key, "duplicate site + waterbody entry");
     seen.add(key);
     if (!e.siteId || !e.waterbodyId) add("query-log", key, "must have both siteId and waterbodyId");
+  }
+
+  /* --- validated studies --- */
+  const studyIds = new Set<string>();
+  for (const s of data.validatedStudies) {
+    if (studyIds.has(s.id)) add("validated-studies", s.id, "duplicate id");
+    studyIds.add(s.id);
+    if (!s.river?.trim()) add("validated-studies", s.id, "river must be stated");
+    if (!["insufficient-data", "low", "medium", "high"].includes(s.confidence)) {
+      add("validated-studies", s.id, "confidence must be insufficient-data | low | medium | high");
+    }
+    if (!s.confidenceReason?.trim()) add("validated-studies", s.id, "confidenceReason must explain the confidence rating");
+    // A real figure needs a real range and a citation; insufficient-data
+    // needs neither - the whole point is recording a genuine gap honestly,
+    // not forcing a number to fill the field.
+    if (s.confidence === "insufficient-data") {
+      if (s.suspendedSedimentMgL !== null) {
+        add("validated-studies", s.id, "confidence is insufficient-data but suspendedSedimentMgL is set - should be null, not a number standing in for a gap");
+      }
+    } else {
+      if (!s.suspendedSedimentMgL) {
+        add("validated-studies", s.id, "must have a suspendedSedimentMgL range unless confidence is insufficient-data");
+      } else if (!(s.suspendedSedimentMgL.low <= s.suspendedSedimentMgL.high)) {
+        add("validated-studies", s.id, "suspendedSedimentMgL.low must be <= .high");
+      }
+      if (!s.citation?.trim()) add("validated-studies", s.id, "a real figure must carry a citation");
+      if (!s.sourceUrl?.trim()) add("validated-studies", s.id, "a real figure must carry a sourceUrl");
+    }
   }
 
   return issues;

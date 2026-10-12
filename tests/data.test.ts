@@ -5,6 +5,7 @@ import {
   loadMembranes,
   loadQueryLog,
   loadTrials,
+  loadValidatedStudies,
   logKey,
   validateData,
   validate,
@@ -188,6 +189,36 @@ describe("query log", () => {
   });
 });
 
+describe("validated studies (rebuild phase 8)", () => {
+  const studies = loadValidatedStudies();
+
+  it("has real, named rivers, not placeholders", () => {
+    const rivers = new Set(studies.map((s) => s.river));
+    expect(rivers).toEqual(new Set(["Thames", "Dee", "Mersey", "Mekong"]));
+  });
+
+  it("every real figure (confidence above insufficient-data) carries a citation and a source URL", () => {
+    for (const s of studies) {
+      if (s.confidence === "insufficient-data") continue;
+      expect(s.citation).toBeTruthy();
+      expect(s.sourceUrl).toMatch(/^https?:\/\//);
+    }
+  });
+
+  it("the Dee entry is an honest gap, not a guessed number", () => {
+    const dee = studies.find((s) => s.river === "Dee")!;
+    expect(dee.confidence).toBe("insufficient-data");
+    expect(dee.suspendedSedimentMgL).toBeNull();
+  });
+
+  it("every real range has low <= high", () => {
+    for (const s of studies) {
+      if (!s.suspendedSedimentMgL) continue;
+      expect(s.suspendedSedimentMgL.low).toBeLessThanOrEqual(s.suspendedSedimentMgL.high);
+    }
+  });
+});
+
 describe("the validator actually rejects bad data", () => {
   // A validator nobody has seen reject anything is not a validator. Each case
   // deliberately breaks one rule and asserts it is caught.
@@ -246,6 +277,20 @@ describe("the validator actually rejects bad data", () => {
     };
     h.log = [entry, structuredClone(entry)];
     expect(problems(h)).toMatch(/duplicate site \+ waterbody/);
+  });
+
+  it("catches a real-confidence study with no citation", () => {
+    const h = structuredClone(good);
+    h.validatedStudies[0].confidence = "medium";
+    h.validatedStudies[0].citation = null;
+    expect(problems(h)).toMatch(/must carry a citation/);
+  });
+
+  it("catches an insufficient-data study that sneaks a number in anyway", () => {
+    const h = structuredClone(good);
+    const dee = h.validatedStudies.find((s) => s.river === "Dee")!;
+    dee.suspendedSedimentMgL = { low: 10, high: 20 };
+    expect(problems(h)).toMatch(/should be null, not a number standing in for a gap/);
   });
 
   it("catches a recorded trial with no volumes", () => {
