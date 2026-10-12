@@ -338,24 +338,96 @@ if (!tideKey) {
 console.log();
 
 /* ---- 5. Satellite turbidity (Sentinel-2/3) - needs real credentials ----- */
+// Rebuild phase 6: OAuth2 alone (below) was proven live in phase 0, but the
+// actual DATA query was never attempted - this tool has never fetched one
+// real satellite turbidity figure. The statistics request below is a
+// best-effort GUESS at the real Sentinel Hub Statistical API shape (base
+// URL, request body, evalscript), the same kind of first attempt EA Water
+// Quality's original 5-URL guess was before the real spec was found - it
+// is NOT built on by any lib/ code until this proves (or corrects) it live.
+// If this 403/404s or the body shape is wrong, that is exactly the signal
+// needed to find the real endpoint, same discipline as every other source.
 console.log(`${c.cyan}5. Satellite turbidity (Copernicus Data Space)${c.reset}`);
 const chId = process.env.COPERNICUS_CLIENT_ID;
 const chSecret = process.env.COPERNICUS_CLIENT_SECRET;
 if (!chId || !chSecret) {
   skip("OAuth2 token request", "COPERNICUS_CLIENT_ID / COPERNICUS_CLIENT_SECRET not set - see .env.local.example");
+  skip("Sentinel Hub statistics request (guessed shape)", "needs the OAuth2 token above");
 } else {
   const tokenRes = await fetch("https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({ grant_type: "client_credentials", client_id: chId, client_secret: chSecret }),
   }).catch((err) => ({ ok: false, _err: err }));
+
+  let accessToken = null;
   if (tokenRes.ok) {
-    console.log(`  ${c.green}ok  ${c.reset} OAuth2 token request ${c.dim}credentials accepted${c.reset}`);
-    results.push({ name: "Copernicus OAuth2 token", outcome: "ok" });
+    const tokenBody = await tokenRes.json().catch(() => null);
+    accessToken = tokenBody?.access_token ?? null;
+    console.log(`  ${c.green}ok  ${c.reset} OAuth2 token request ${c.dim}credentials accepted${accessToken ? "" : ", but no access_token field found in the body - shape may have changed"}${c.reset}`);
+    results.push({ name: "Copernicus OAuth2 token", outcome: accessToken ? "ok" : "fail", body: accessToken ? undefined : tokenBody });
   } else {
     const detail = tokenRes._err?.message ?? `HTTP ${tokenRes.status}`;
     console.log(`  ${c.red}FAIL${c.reset} OAuth2 token request ${c.dim}${detail}${c.reset}`);
     results.push({ name: "Copernicus OAuth2 token", outcome: "fail", detail });
+  }
+
+  if (!accessToken) {
+    skip("Sentinel Hub statistics request (guessed shape)", "no access token obtained above");
+  } else {
+    // GUESSED base URL and path - sh.dataspace.copernicus.eu is Copernicus
+    // Data Space's documented Sentinel Hub-compatible endpoint as of this
+    // tool's training data, but that is exactly the kind of claim this
+    // project insists on proving live, not trusting from memory.
+    const half = 0.01; // ~1 km box around the test point, in degrees - rough on purpose, this is a guess being tested
+    const today = new Date();
+    const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const iso = (d) => d.toISOString().slice(0, 10);
+    // NDTI (Normalized Difference Turbidity Index, Lacaux et al.) from
+    // Sentinel-2 L2A red/green bands - a real, published turbidity proxy,
+    // not an invented formula; what's unproven here is only whether THIS
+    // API will actually evaluate it in this request shape.
+    const evalscript = `
+//VERSION=3
+function setup() {
+  return { input: ["B04", "B03", "dataMask"], output: { bands: 1 } };
+}
+function evaluatePixel(s) {
+  return [(s.B04 - s.B03) / (s.B04 + s.B03 + 1e-6)];
+}`;
+    const statsBody = {
+      input: {
+        bounds: {
+          bbox: [lon - half, lat - half, lon + half, lat + half],
+          properties: { crs: "http://www.opengis.net/def/crs/EPSG/0/4326" },
+        },
+        data: [{ type: "sentinel-2-l2a", dataFilter: { timeRange: { from: `${iso(monthAgo)}T00:00:00Z`, to: `${iso(today)}T23:59:59Z` }, maxCloudCoverage: 60 } }],
+      },
+      aggregation: {
+        timeRange: { from: `${iso(monthAgo)}T00:00:00Z`, to: `${iso(today)}T23:59:59Z` },
+        aggregationInterval: { of: "P30D" },
+        evalscript,
+        resx: 10,
+        resy: 10,
+      },
+    };
+    const statsRes = await fetch("https://sh.dataspace.copernicus.eu/api/v1/statistics", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${accessToken}` },
+      body: JSON.stringify(statsBody),
+    }).catch((err) => ({ ok: false, _err: err }));
+    if (statsRes.ok !== undefined) {
+      const text = await (statsRes.text ? statsRes.text() : Promise.resolve(""));
+      let body = text;
+      try { body = JSON.parse(text); } catch { /* keep text */ }
+      const outcome = statsRes.ok ? "ok" : "fail";
+      const label = outcome === "ok" ? c.green + "ok  " : c.red + "FAIL";
+      console.log(`  ${label}${c.reset} Sentinel Hub statistics request (guessed shape) ${c.dim}${statsRes.status}, ${text.length} b${c.reset}`);
+      results.push({ name: "Sentinel Hub statistics request (guessed shape)", url: "https://sh.dataspace.copernicus.eu/api/v1/statistics", outcome, httpStatus: statsRes.status, bytes: text.length, body });
+    } else {
+      console.log(`  ${c.red}FAIL${c.reset} Sentinel Hub statistics request (guessed shape) ${c.dim}${statsRes._err?.message}${c.reset}`);
+      results.push({ name: "Sentinel Hub statistics request (guessed shape)", outcome: "fail", error: statsRes._err?.message });
+    }
   }
 }
 console.log();

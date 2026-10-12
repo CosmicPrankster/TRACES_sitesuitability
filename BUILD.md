@@ -291,6 +291,42 @@ session.
 10 new tests (`tests/tide.test.ts`) against the real Bosham fixture.
 261/261 tests pass, `tsc --noEmit` and `next build` both clean.
 
+### Rebuild phase 6: satellite turbidity - NOT built, genuinely blocked
+
+Unlike every other phase this rebuild has shipped, **no `lib/sources/
+satellite-turbidity.ts` was written**, and that's a deliberate call, not an
+oversight. Phase 0 only ever proved the OAuth2 token exchange
+(`identity.dataspace.copernicus.eu`) - the actual data query (fetching one
+real turbidity figure for a point) has never been attempted against a real
+response, at any point in this project's history. Per HANDOFF rule 1, a
+source that hasn't been proven to respond is not built on, and this one
+hasn't.
+
+`scripts/probe-new-sources.mjs` section 5 now goes one step further than
+before: if OAuth2 succeeds, it makes a real HTTP request to a **guessed**
+Sentinel Hub Statistical API shape (`sh.dataspace.copernicus.eu/api/v1/
+statistics`, a real published NDTI turbidity formula as the evalscript,
+30-day aggregation over a small bbox) - the same kind of first-attempt
+guess the original EA Water Quality probe made before its real spec was
+found, clearly labelled as such in the script's own comments, and not
+trusted for anything beyond "does this come back real."
+
+This also fixed a real bug the OAuth2 check never caught before: the old
+code checked `tokenRes.ok` but never parsed the token response body, so it
+could never actually have used the token for a follow-up call even if one
+had been attempted.
+
+**Why this stops here rather than guessing further:** the plan's own
+phase-0 reasoning already ranks this the lowest-certainty, highest-effort
+tier ("needs an account/key, lowest certainty it's worth the cost"), and
+unlike tide/EA-water-quality, there is no captured real response to build
+parsing logic against - writing a production fetcher now would mean
+inventing field names for a response shape nobody has seen, the exact
+mistake this project keeps catching itself making with guessed shapes
+elsewhere. This needs one more live probe round (an API key + a run of the
+updated probe script) before any real code gets written - not marked done
+until that happens.
+
 ### Two findings that mattered more than the pass/fail list
 
 **The v1 probe reported empty responses as "ok".** That hid the BGS failure
