@@ -99,66 +99,29 @@ console.log(`\n${c.bold}Probing new sources (rebuild phase 0) at:${c.reset} ${la
 // actually serves" approach proven out for BGS in scripts/probe.mjs, rather
 // than guessing a GetFeatureInfo layer name blind.
 console.log(`${c.cyan}1. Soil texture (Soilscapes / UKSO)${c.reset}`);
-await get("Soilscapes WMS GetCapabilities",
-  "https://www.landis.org.uk/webservices/soilscapes_wms.cfm?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
-  { accept: "text/xml" });
-await get("UKSO WMS GetCapabilities (ukso.org/geoserver guess)",
-  "https://www.ukso.org/geoserver/wms?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
-  { accept: "text/xml" });
-// Same directory-listing technique as the BGS probe below, tried on
-// Cranfield's own host rather than another single guessed path.
-await get("Soilscapes ArcGIS services directory listing (landis.org.uk)",
-  "https://www.landis.org.uk/arcgis/rest/services?f=json");
-// That directory listing CONFIRMED real "Soilscapes" and "UKSoilObservatory"
-// folders exist on this host - not a guess, read straight from the server's
-// own response. One level deeper, into each, to find the actual service name.
-await get("Soilscapes folder contents (landis.org.uk)",
+// landis.org.uk's Soilscapes service is DROPPED: four real, independent
+// attempts (WMS GetCapabilities, a FeatureServer query, and a bare
+// metadata request with no query at all) failed differently each time,
+// the last one with an explicit, specific error from Cranfield's own
+// server - "No Layer or Table was initialized" - confirming this is a
+// broken data layer on their infrastructure, not a wrong URL or request
+// shape on this project's end. Not worth chasing further.
+await get("Soilscapes ArcGIS services directory listing (landis.org.uk) - service exists, data layer is broken",
   "https://www.landis.org.uk/arcgis/rest/services/Soilscapes?f=json");
-await get("UKSoilObservatory folder contents (landis.org.uk)",
-  "https://www.landis.org.uk/arcgis/rest/services/UKSoilObservatory?f=json");
-// "Soilscapes/soilscapes" itself is dead (still a generic ArcGIS error, no
-// detail). The same folder also listed "Soilscapes/natmapsoilscapes" -
-// NATMAP Soilscapes is Cranfield's actual official product name for this
-// dataset, so that's the more likely real one, tried both as WMS and as a
-// direct FeatureServer query (it's listed as both types).
-await get("Soilscapes/natmapsoilscapes WMS GetCapabilities",
-  "https://www.landis.org.uk/arcgis/services/Soilscapes/natmapsoilscapes/MapServer/WMSServer?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
-  { accept: "text/xml" });
-await get("Soilscapes/natmapsoilscapes FeatureServer query (small sample)",
-  "https://www.landis.org.uk/arcgis/rest/services/Soilscapes/natmapsoilscapes/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson&resultRecordCount=1");
-// Both the above failed differently (400, 500) on two different endpoint
-// shapes of the same service. One more, cheapest-possible check before
-// giving up: just the MapServer's own metadata, no query at all - if even
-// this fails, the service is down server-side, not a wrong request shape.
-await get("Soilscapes/natmapsoilscapes MapServer metadata (last check)",
-  "https://www.landis.org.uk/arcgis/rest/services/Soilscapes/natmapsoilscapes/MapServer?f=json");
-// The user pulled a REAL working example from the LandIS portal's own API
-// Explorer (after registering): an ArcGIS Online-hosted FeatureServer under
-// org BsCa1SurMySYByZ3, for soil auger profile points. Proving this exact
-// pattern first, then listing ALL services under the same org - if auger
-// profiles live here, a Soilscapes texture-class layer likely does too,
-// without guessing its exact name.
-await get("LandIS AUGERprofile FeatureServer query (real example from API Explorer)",
-  "https://services-eu1.arcgis.com/BsCa1SurMySYByZ3/arcgis/rest/services/AUGERprofile/FeatureServer/0/query?outFields=*&where=1%3D1&f=geojson&resultRecordCount=3");
+// LandIS's ArcGIS Online org (found via the user's API Explorer) only
+// hosts a token-gated auger-profile layer and a Survey123 form - no
+// texture-classification service there either.
 await get("LandIS ArcGIS Online org services directory",
   "https://services-eu1.arcgis.com/BsCa1SurMySYByZ3/arcgis/rest/services?f=json");
-// BGS already hosts a WORKING ArcGIS-based WMS for geology (see lib/live-site.ts's
-// BGS_WMS) - UKSO is also a BGS service, so the same host/pattern is a better-
-// grounded guess than a cold one.
-await get("UKSO WMS GetCapabilities (BGS ArcGIS host guess)",
-  "https://map.bgs.ac.uk/arcgis/services/UKSO/UKSO_Soils/MapServer/WMSServer?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
+// One last, independently-hosted candidate: BGS's own UKSO folder (a
+// different host/infrastructure entirely, so not subject to whatever is
+// broken on landis.org.uk) listed a real "UKSO_BGS_NSI" service - the
+// National Soil Inventory, Cranfield's/BGS's actual texture survey data,
+// not a guessed name. This is the last soil-texture attempt - if it
+// fails too, soil texture is dropped from phase 0 like land cover was.
+await get("BGS National Soil Inventory (UKSO_BGS_NSI) WMS GetCapabilities",
+  "https://map.bgs.ac.uk/arcgis/services/UKSO/UKSO_BGS_NSI/MapServer/WMSServer?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
   { accept: "text/xml" });
-// That guessed service name got a generic ArcGIS error with no hint. Rather
-// than guess another folder name blind, ask the server directly what it
-// actually hosts - ArcGIS Server exposes a REST directory listing. This
-// settles whether a UKSO/soil service exists on this host at all, instead
-// of another shot in the dark.
-await get("BGS ArcGIS services directory listing",
-  "https://map.bgs.ac.uk/arcgis/rest/services?f=json");
-// That listing also confirmed a real "UKSO" folder on BGS's own server -
-// a second, independent host hosting UKSO data. One level deeper.
-await get("UKSO folder contents (map.bgs.ac.uk)",
-  "https://map.bgs.ac.uk/arcgis/rest/services/UKSO?f=json");
 console.log();
 
 /* ---- 2. EA Water Quality Archive - RE-PROBE with the modern linked-data API */
@@ -184,8 +147,11 @@ await get("EA water-quality OpenAPI spec", "https://environment.data.gov.uk/wate
 const wqPoints = await get("sampling points near site (corrected Accept header)",
   `https://environment.data.gov.uk/water-quality/sampling-point?latitude=${lat}&longitude=${lon}&radius=10&limit=5`,
   { accept: "application/geo+json" });
-if (wqPoints?.items?.length || wqPoints?.features?.length) {
-  const items = wqPoints.items ?? wqPoints.features;
+// Real response shape (confirmed from an actual body, not guessed): JSON-LD
+// Hydra Collection - {"type":"hydra:Collection","member":[...]} - not the
+// "items" or "features" this originally assumed.
+if (wqPoints?.member?.length || wqPoints?.items?.length || wqPoints?.features?.length) {
+  const items = wqPoints.member ?? wqPoints.items ?? wqPoints.features;
   const p = items[0];
   console.log(`     ${c.dim}nearest type: ${p.properties?.type ?? "?"}${c.reset}`);
   // All 5 nearby points were sewage-discharge/effluent monitoring, not
