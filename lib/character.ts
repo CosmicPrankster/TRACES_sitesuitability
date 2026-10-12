@@ -82,6 +82,89 @@ export function hasEnoughToInfer(p: CatchmentProperties): boolean {
 }
 
 /**
+ * The character-category boundaries characterFromCoarseness uses. Exported
+ * so the tier-descent decision below can check proximity to them without
+ * duplicating the thresholds themselves.
+ */
+export const CATEGORY_THRESHOLDS = [-0.5, 0.1, 0.55] as const;
+const BOUNDARY_MARGIN = 0.1;
+
+export function isNearCategoryBoundary(coarseness: number): boolean {
+  return CATEGORY_THRESHOLDS.some((t) => Math.abs(coarseness - t) < BOUNDARY_MARGIN);
+}
+
+/**
+ * Tier-5-only coarseness: bedrock + base flow + land cover, no geology.
+ * Mirrors steps 1-4 of inferCharacter's reasoning build exactly, as plain
+ * arithmetic with no prose - this is ONLY used to decide, before BGS is
+ * ever called, whether descending to tier 6 (mapped point geology) is worth
+ * it. inferCharacter remains the single source of truth for the actual
+ * inference and its reasoning; if these two drift apart, character.test.ts's
+ * tier-descent tests will catch it against real NRFA fixtures.
+ */
+function catchmentOnlyCoarseness(p: CatchmentProperties): number {
+  const high = num(p.highPermBedrock);
+  const moderate = num(p.moderatePermBedrock);
+  const low = num(p.lowPermBedrock);
+  const mixed = num(p.mixedPermBedrock);
+  const bedrockTotal = high + moderate + low + mixed;
+
+  let coarseness = bedrockTotal > 0 ? (high + 0.4 * moderate - low) / bedrockTotal : 0;
+
+  const bfi = p.bfihost;
+  if (typeof bfi === "number") {
+    if (bfi >= 0.7) coarseness += 0.25;
+    else if (bfi <= 0.45) coarseness -= 0.25;
+  }
+
+  const crop = p.cropland;
+  if (typeof crop === "number" && crop > 0) {
+    if (crop >= 0.4) coarseness -= 0.35;
+    else if (crop >= 0.2) coarseness -= 0.15;
+  }
+
+  const urban = p.builtUp;
+  if (typeof urban === "number" && urban >= 0.15) coarseness -= 0.1;
+
+  return coarseness;
+}
+
+/**
+ * The tier-5 -> tier-6 descent decision (see HANDOFF.md / the rebuild plan's
+ * "Descent rule"): stop at the first tier with usable data, and drop one
+ * tier further only to corroborate a result worth double-checking - not
+ * merely because the next tier exists. BGS's point geology (tier 6) is
+ * worth fetching only when one of two things is true, both computable from
+ * NRFA alone, before BGS is ever called:
+ *
+ *   - the catchment-only reading sits near a category boundary, where one
+ *     more piece of evidence could change the answer; or
+ *   - the catchment reads impermeable-bedrock-dominant, which carries a
+ *     known failure mode regardless of how confidently it reads: NRFA
+ *     classes crystalline (igneous/metamorphic) rock as low-permeability,
+ *     but permeability describes water movement, not grain size - granite
+ *     and psammite weather to coarse sand. A confidently "impermeable"
+ *     catchment can still be this trap, so it is always worth a second
+ *     opinion from the mapped geology (see the permeability-trap handling
+ *     in inferCharacter below).
+ *
+ * A confidently permeable catchment (e.g. high-permeability-bedrock, high
+ * base flow, nowhere near a threshold) has neither risk, and tier 6 is
+ * skipped - no BGS call is made for it at all.
+ */
+export function worthCorroboratingWithGeology(p: CatchmentProperties): boolean {
+  const high = num(p.highPermBedrock);
+  const moderate = num(p.moderatePermBedrock);
+  const low = num(p.lowPermBedrock);
+  const mixed = num(p.mixedPermBedrock);
+  const bedrockTotal = high + moderate + low + mixed;
+  const lowPermDominant = bedrockTotal > 0 && low / bedrockTotal > 0.5;
+  if (lowPermDominant) return true;
+
+  return isNearCategoryBoundary(catchmentOnlyCoarseness(p));
+}
+
+/**
  * Optional corroboration from BGS geology at the point.
  * NRFA drives the inference because a river integrates its whole catchment;
  * BGS names the specific rock and either backs the reading up or contradicts

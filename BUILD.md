@@ -72,6 +72,41 @@ Phase 0 is now closed: tide, satellite-auth, EA water quality, and COSMOS-UK
 are real and proven; soil texture and land cover are deliberately not built,
 for the reasons above, not because the search was incomplete.
 
+### Rebuild phase 2: the hierarchy-descent orchestrator (existing sources only)
+
+Before this phase, `screenStation` always fetched BGS's point geology for
+every confirmed NRFA station, in parallel with the NRFA record, and
+`inferCharacter` always blended it in when present. That is not tier
+descent - it is "fetch everything, every time" with the decision made
+silently inside the blending math.
+
+`lib/character.ts` now exposes `worthCorroboratingWithGeology(catchment)`,
+computed from the NRFA record alone, before BGS is ever called. It says yes
+in exactly two cases: the catchment-only reading sits near a category
+boundary (`isNearCategoryBoundary`, margin 0.1 either side of the three
+thresholds), or the catchment reads impermeable-bedrock-dominant - which
+carries a known failure mode regardless of how confidently it reads (the
+permeability trap: NRFA classes crystalline rock low-permeability, but
+permeability is about water movement, not grain size - see the real Spey
+fixture in `tests/character.test.ts`, which reads confidently "fine" from
+the catchment alone and is only corrected once geology is consulted).
+Everything else - a catchment that reads clearly and safely permeable, like
+the real Wey at Tilford - never triggers a BGS call at all.
+
+`lib/live-site.ts`'s `screenStation` now fetches NRFA first, decides, and
+only then conditionally fetches BGS - sequential instead of parallel for the
+cases that do descend, but zero BGS calls at all for the cases that don't.
+`StationScreenSuccess` carries a new `geologyConsulted` flag so a caller can
+tell "point geology wasn't checked" apart from "point geology was checked
+and had nothing mapped there" - the two were indistinguishable before.
+
+`inferCharacter`'s own blending logic (agreement/disagreement reasoning, the
+permeability-trap override) is unchanged and still fully tested - this phase
+only changes *whether* BGS gets called, not what happens once it answers.
+6 new tests in `tests/character.test.ts`, all against real NRFA fixtures
+already in the file; 217/217 tests pass, `tsc --noEmit` and `next build`
+clean.
+
 ### Two findings that mattered more than the pass/fail list
 
 **The v1 probe reported empty responses as "ok".** That hid the BGS failure

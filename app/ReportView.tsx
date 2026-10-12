@@ -38,6 +38,8 @@ interface Screened {
   /** The geocoded anchor, present for the geology-only path - it is the actual point read. */
   geocode?: { displayName: string; matchedOn: string };
   geologyStatement: string | null;
+  /** Absent for the geology-only path, where point geology is the only tier there is. */
+  geologyConsulted?: boolean;
   characterInference: CharacterInference;
   psd: Psd;
   assessments: MembraneAssessment[];

@@ -5,6 +5,8 @@ import {
   hasEnoughToInfer,
   inferCharacter,
   inferCharacterFromGeologyOnly,
+  isNearCategoryBoundary,
+  worthCorroboratingWithGeology,
   type CatchmentProperties,
 } from "@/lib/character";
 
@@ -284,6 +286,52 @@ describe("the permeability trap (Spey at Boat of Garten, real data)", () => {
       coarseness: -0.6, statement: "x", bedrockIsCrystalline: true, coarseSuperficial: false,
     })!;
     expect(["silt", "clay"]).toContain(r.character);
+  });
+});
+
+describe("tier-descent: deciding whether BGS point geology is worth fetching at all", () => {
+  /**
+   * The orchestration this phase adds: screenStation only calls BGS when
+   * one of these two tests says so, not for every confirmed station. Real
+   * NRFA fixtures already used above, so a drift between
+   * catchmentOnlyCoarseness and inferCharacter's own step 1-4 math would
+   * show up here as a wrong answer, not just in isolation.
+   */
+
+  it("skips it for a confidently permeable catchment, nowhere near a boundary (the real Wey)", () => {
+    expect(worthCorroboratingWithGeology(fromNrfaRecord(WEY_AT_TILFORD))).toBe(false);
+  });
+
+  it("skips it for any other confidently permeable, far-from-boundary catchment", () => {
+    expect(worthCorroboratingWithGeology({ highPermBedrock: 1, bfihost: 0.8 })).toBe(false);
+  });
+
+  it("always fetches it for an impermeable-bedrock-dominant catchment - the permeability-trap risk (the real Motray)", () => {
+    expect(worthCorroboratingWithGeology(fromNrfaRecord(MOTRAY_AT_ST_MICHAELS))).toBe(true);
+  });
+
+  it("always fetches it for the real Spey, even though its catchment-only reading is confidently (wrongly) fine", () => {
+    const spey: CatchmentProperties = {
+      lowPermBedrock: 1,
+      bfihost: 0.412,
+      cropland: 0.0013,
+      builtUp: 0.0044,
+    };
+    expect(worthCorroboratingWithGeology(spey)).toBe(true);
+  });
+
+  it("fetches it for a permeable catchment that sits close to a category threshold", () => {
+    // coarseness ~0.58, within the margin of the sand/mixed_mineral boundary at 0.55.
+    const nearBoundary: CatchmentProperties = { highPermBedrock: 0.3, moderatePermBedrock: 0.7 };
+    expect(worthCorroboratingWithGeology(nearBoundary)).toBe(true);
+  });
+
+  it("isNearCategoryBoundary is true at each threshold and false well clear of all of them", () => {
+    for (const t of [-0.5, 0.1, 0.55]) {
+      expect(isNearCategoryBoundary(t)).toBe(true);
+    }
+    expect(isNearCategoryBoundary(-2)).toBe(false);
+    expect(isNearCategoryBoundary(2)).toBe(false);
   });
 });
 

@@ -100,6 +100,7 @@ export async function GET(request: Request) {
     ok: true,
     station: screened.station,
     geologyStatement: screened.geologyStatement,
+    geologyConsulted: screened.geologyConsulted,
     characterInference: screened.characterInference,
     psd,
     assessments,

@@ -13,6 +13,7 @@ import {
   fromNrfaRecord,
   inferCharacter,
   inferCharacterFromGeologyOnly,
+  worthCorroboratingWithGeology,
   type CatchmentProperties,
   type CharacterInference,
   type GeologyCorroboration,
@@ -247,19 +248,36 @@ export interface StationScreenSuccess {
   station: NrfaStation;
   catchment: CatchmentProperties;
   geologyStatement: string | null;
+  /**
+   * Whether BGS's point geology (tier 6) was actually fetched for this site.
+   * False means the catchment-only (tier 5) reading was clear enough on its
+   * own that the extra call was skipped - see character.ts's
+   * worthCorroboratingWithGeology. Distinct from geologyStatement being
+   * null for the other reason: BGS was asked and had nothing mapped there.
+   */
+  geologyConsulted: boolean;
   characterInference: CharacterInference;
 }
 
 export type StationScreenResult = StationScreenSuccess | StationScreenFailure;
 
-/** Full catchment record + BGS geology + character inference for a CONFIRMED station. */
+/**
+ * Full catchment record + character inference for a CONFIRMED station - BGS
+ * point geology (tier 6) is only fetched when the catchment-only (tier 5)
+ * reading is actually worth corroborating (see character.ts's
+ * worthCorroboratingWithGeology). That decision needs the catchment record
+ * first, so this is two sequential steps rather than one parallel fetch:
+ * most of the cost of tier 6 is only paid when it can actually change the
+ * answer.
+ */
 export async function screenStation(station: NrfaStation): Promise<StationScreenResult> {
-  const [fullRecord, corroboration] = await Promise.all([
-    fetchNrfaFullRecord(station.id),
-    fetchGeologyCorroboration(station.easting, station.northing),
-  ]);
-
+  const fullRecord = await fetchNrfaFullRecord(station.id);
   const catchment = fromNrfaRecord(fullRecord ?? { id: station.id, name: station.name });
+
+  const corroboration = worthCorroboratingWithGeology(catchment)
+    ? await fetchGeologyCorroboration(station.easting, station.northing)
+    : undefined;
+
   const characterInference = inferCharacter(catchment, corroboration);
   if (!characterInference) {
     return {
@@ -269,7 +287,14 @@ export async function screenStation(station: NrfaStation): Promise<StationScreen
     };
   }
 
-  return { ok: true, station, catchment, geologyStatement: corroboration?.statement ?? null, characterInference };
+  return {
+    ok: true,
+    station,
+    catchment,
+    geologyStatement: corroboration?.statement ?? null,
+    geologyConsulted: Boolean(corroboration),
+    characterInference,
+  };
 }
 
 /* ------------------------------------------------------------------ */
