@@ -22,6 +22,7 @@ import { isCrystallineBedrock, parseBgsFeatureInfo, readLithology, summariseGeol
 import { screenRiverWaterQuality } from "./sources/water-quality";
 import type { SiteConcentration } from "./baseline";
 import { assessSiteFlags, type SiteFlags } from "./flags";
+import { screenTideState, type TideState } from "./sources/tide";
 
 /**
  * BLOCK 6, site input - the live version of scripts/probe.mjs's data path,
@@ -176,6 +177,21 @@ async function fetchSiteConcentration(easting: number, northing: number): Promis
   };
 }
 
+/**
+ * Tide state near the site (lib/sources/tide.ts, rebuild phase 5) -
+ * undefined whenever there's nothing to report: no ADMIRALTY_TIDE_API_KEY
+ * set (skipped, not failed - matches scripts/probe-new-sources.mjs's own
+ * vocabulary for a missing key), or no real tide station close enough to
+ * treat the site as estuarine. Gated to estuarine sites per the rebuild
+ * plan - never fetched or reported for an ordinary inland river site.
+ */
+async function fetchTideState(easting: number, northing: number): Promise<TideState | undefined> {
+  const apiKey = process.env.ADMIRALTY_TIDE_API_KEY;
+  if (!apiKey) return undefined;
+  const state = await screenTideState(easting, northing, apiKey);
+  return state ?? undefined;
+}
+
 /* ------------------------------------------------------------------ */
 /* Step 1: match - cheap, never commits to a station                   */
 /* ------------------------------------------------------------------ */
@@ -298,6 +314,8 @@ export interface StationScreenSuccess {
   siteConcentration?: SiteConcentration;
   /** Algae/inhibition risk flags (lib/flags.ts, rebuild phase 4) - independent of characterInference, never blended into it. */
   flags: SiteFlags;
+  /** Tide state (lib/sources/tide.ts, rebuild phase 5) - undefined for an ordinary inland site, or when no API key is set. See fetchTideState. */
+  tideState?: TideState;
   characterInference: CharacterInference;
 }
 
@@ -317,9 +335,10 @@ export type StationScreenResult = StationScreenSuccess | StationScreenFailure;
  * actually change the answer.
  */
 export async function screenStation(station: NrfaStation): Promise<StationScreenResult> {
-  const [fullRecord, siteConcentration] = await Promise.all([
+  const [fullRecord, siteConcentration, tideState] = await Promise.all([
     fetchNrfaFullRecord(station.id),
     fetchSiteConcentration(station.easting, station.northing),
+    fetchTideState(station.easting, station.northing),
   ]);
   const catchment = fromNrfaRecord(fullRecord ?? { id: station.id, name: station.name });
 
@@ -349,6 +368,7 @@ export async function screenStation(station: NrfaStation): Promise<StationScreen
     geologyConsulted: Boolean(corroboration),
     siteConcentration,
     flags,
+    tideState,
     characterInference,
   };
 }
@@ -365,6 +385,8 @@ export interface PointGeologySuccess {
   siteConcentration?: SiteConcentration;
   /** Algae flag is always insufficient-data here - no catchment land cover without an NRFA gauge. Inhibition flag uses the real geology just read. */
   flags: SiteFlags;
+  /** Tide state (lib/sources/tide.ts) - this no-NRFA-gauge path is exactly where a tidal/estuarine site tends to land, since NRFA gauges exclude tidal reaches by design. */
+  tideState?: TideState;
   characterInference: CharacterInference;
 }
 
@@ -376,13 +398,15 @@ export type PointGeologyResult = PointGeologySuccess | PointGeologyFailure;
  * confirmation step (resolution.needsConfirmation is already false for
  * "none" - there is no candidate to choose between, only the presence or
  * absence of mapped geology at the one point already geocoded). The real
- * measured-water-quality tier is independent of whether a gauge exists, so
- * it's fetched here too, in parallel with the BGS lookup.
+ * measured-water-quality and tide-state tiers are independent of whether a
+ * gauge exists, so both are fetched here too, in parallel with the BGS
+ * lookup.
  */
 export async function screenPointGeology(easting: number, northing: number): Promise<PointGeologyResult> {
-  const [corroboration, siteConcentration] = await Promise.all([
+  const [corroboration, siteConcentration, tideState] = await Promise.all([
     fetchGeologyCorroboration(easting, northing),
     fetchSiteConcentration(easting, northing),
+    fetchTideState(easting, northing),
   ]);
   if (!corroboration) {
     return {
@@ -401,6 +425,7 @@ export async function screenPointGeology(easting: number, northing: number): Pro
     geologyStatement: corroboration.statement,
     siteConcentration,
     flags,
+    tideState,
     characterInference: inferCharacterFromGeologyOnly(corroboration),
   };
 }

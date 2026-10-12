@@ -45,6 +45,13 @@ interface Screened {
   siteConcentration?: { mgL: number; source: string } | null;
   /** Algae/inhibition risk flags (lib/flags.ts) - independent of characterInference, shown alongside it, never blended into it. */
   flags: SiteFlags;
+  /** Tide state (lib/sources/tide.ts) - null for an ordinary inland site or when no API key is set, not an error. */
+  tideState?: {
+    station: { id: string; name: string; distanceKm: number };
+    phase: "flooding" | "ebbing" | "unknown";
+    springNeap: "closer-to-spring" | "closer-to-neap" | "mid-cycle" | "unknown";
+    reasoning: string;
+  } | null;
   characterInference: CharacterInference;
   psd: Psd;
   assessments: MembraneAssessment[];
@@ -142,6 +149,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
           geologyStatement: data.geologyStatement,
           siteConcentration: data.siteConcentration,
           flags: data.flags,
+          tideState: data.tideState,
           characterInference: data.characterInference,
           psd: data.psd,
           assessments: data.assessments,
@@ -344,6 +352,13 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
               </span>{" "}
               <span className="hint">{live.flags.inhibition.reasoning}</span>
             </p>
+            {live.tideState && (
+              <p>
+                <strong>Tide state:</strong> {live.tideState.station.name} tide station,{" "}
+                {live.tideState.station.distanceKm.toFixed(1)} km away - {live.tideState.phase}, {live.tideState.springNeap}.{" "}
+                <span className="hint">{live.tideState.reasoning}</span>
+              </p>
+            )}
           </div>
         </section>
       )}

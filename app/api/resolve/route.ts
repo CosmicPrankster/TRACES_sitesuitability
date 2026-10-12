@@ -55,6 +55,7 @@ export async function GET(request: Request) {
     geologyStatement: pointGeology.geologyStatement,
     siteConcentration: pointGeology.siteConcentration ?? null,
     flags: pointGeology.flags,
+    tideState: pointGeology.tideState ?? null,
     characterInference: pointGeology.characterInference,
     psd,
     assessments,

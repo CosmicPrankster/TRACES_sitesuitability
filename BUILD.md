@@ -240,6 +240,57 @@ added to `ReportView.tsx` (a labelled risk pill + reasoning per flag,
 reusing the existing colour tokens). 251/251 tests pass, `tsc --noEmit`
 and `next build` both clean.
 
+### Rebuild phase 5: tide-state modifier (`lib/sources/tide.ts`)
+
+Built against the Admiralty UK Tidal API shapes already proven live in
+phase 0 - a real 607-station list and a real 7-day high/low-water event
+window for station 0068B (Bosham). One real quirk the real data itself
+revealed and this module works around rather than papering over:
+**LowWater events at this API tier carry a `Date` but no `DateTime` or
+`Height` at all** - every real LowWater entry in the captured fixture is
+missing both, consistently across the whole week, not a one-off gap. Every
+calculation here uses HighWater events only; nothing invents a low-water
+time to fill the hole.
+
+Per the plan, tide state doesn't say what the sediment is - it says how
+much to trust any reading taken right now - so, like `lib/flags.ts`'s
+algae/inhibition flags, it's reported alongside the main result and never
+blended into the mineral-character verdict or the baseline-volume number.
+
+Two honesty calls worth recording:
+
+- **"Gated to estuarine sites"** has no direct estuary/tidal-limit dataset
+  to gate on, so proximity to a real tide station (within 5 km) is used as
+  the only available proxy - a well-inland site never triggers this tier
+  at all, not even a fetch. NRFA stations in particular rarely trigger it:
+  NRFA gauges exclude tidal reaches by design, so the no-NRFA-gauge
+  fallback path (`screenPointGeology`) is actually where a genuinely
+  estuarine site tends to land.
+- **Spring/neap is read relative to whatever window was actually fetched**
+  (`duration=7` - the proven shape), not a full 14-day cycle or a harmonic
+  calculation this API tier doesn't expose. The real Bosham fixture shows
+  why this matters: heights decline monotonically all the way across the
+  captured week (4.87 m down to 3.66 m) - only one direction is visible in
+  any single week, so "closer to spring" / "closer to neap" is explicitly
+  labelled as relative to the fetched window in its own reasoning text,
+  not a precise astronomical phase.
+
+Flood/ebb is read by bracketing the current time between the two real
+HighWater times either side of it - the first half of that ~12.5-hour gap
+reads as still falling (ebbing) from the previous high, the second half as
+rising (flooding) toward the next one.
+
+Needs a real `ADMIRALTY_TIDE_API_KEY` to actually fetch anything; with none
+set, this tier is SKIPPED (not failed) - the same distinct outcome
+`scripts/probe-new-sources.mjs` already uses for a missing key. No live
+key was available in this sandbox for an end-to-end run, so this is built
+and tested against the proven real shapes, same discipline as the tide
+section of the original probe script, not live-verified end to end this
+session.
+
+10 new tests (`tests/tide.test.ts`) against the real Bosham fixture.
+261/261 tests pass, `tsc --noEmit` and `next build` both clean.
+
 ### Two findings that mattered more than the pass/fail list
 
 **The v1 probe reported empty responses as "ok".** That hid the BGS failure
