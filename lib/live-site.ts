@@ -19,6 +19,8 @@ import {
   type GeologyCorroboration,
 } from "./character";
 import { isCrystallineBedrock, parseBgsFeatureInfo, readLithology, summariseGeology } from "./geology";
+import { screenRiverWaterQuality } from "./sources/water-quality";
+import type { SiteConcentration } from "./baseline";
 
 /**
  * BLOCK 6, site input - the live version of scripts/probe.mjs's data path,
@@ -143,6 +145,34 @@ async function fetchGeologyCorroboration(easting: number, northing: number): Pro
   };
 }
 
+/**
+ * Real measured solids concentration near the site, from the EA Water
+ * Quality Archive's nearest ordinary river/stream point (lib/sources/
+ * water-quality.ts, rebuild phase 3) - undefined, not a guess, whenever no
+ * such point exists nearby, or none of its recent readings are a
+ * suspended-solids concentration (ambient monitoring is sparse; an empty
+ * result here is a real, honest outcome, not a failure).
+ *
+ * Takes the single most recent suspended-solids-concentration reading
+ * found. A "less than" censored result (e.g. "<3 mg/L") uses its upper
+ * bound - the conservative direction for this tool: that can only ever
+ * make the predicted baseline volume LOWER than the true figure, never
+ * overclaim performance on a site this tool has under-read.
+ */
+async function fetchSiteConcentration(easting: number, northing: number): Promise<SiteConcentration | undefined> {
+  const result = await screenRiverWaterQuality(easting, northing);
+  if (!result.ok) return undefined;
+  const latest = result.data.suspendedSolidsMgL[0];
+  if (!latest) return undefined;
+  const mgL = latest.value ?? latest.censored?.value;
+  if (!(mgL! > 0)) return undefined;
+  const censoredNote = latest.censored ? " (a \"less than\" result, used at its upper bound)" : "";
+  return {
+    mgL: mgL!,
+    source: `EA Water Quality Archive, ${result.point.name}, ${latest.date.slice(0, 10)}${censoredNote}`,
+  };
+}
+
 /* ------------------------------------------------------------------ */
 /* Step 1: match - cheap, never commits to a station                   */
 /* ------------------------------------------------------------------ */
@@ -256,22 +286,36 @@ export interface StationScreenSuccess {
    * null for the other reason: BGS was asked and had nothing mapped there.
    */
   geologyConsulted: boolean;
+  /**
+   * A real measured solids concentration near the site (tier 2: EA Water
+   * Quality Archive), if one was found - undefined is a real, honest
+   * outcome (no nearby river point, or no recent suspended-solids
+   * reading), not a failure. See fetchSiteConcentration.
+   */
+  siteConcentration?: SiteConcentration;
   characterInference: CharacterInference;
 }
 
 export type StationScreenResult = StationScreenSuccess | StationScreenFailure;
 
 /**
- * Full catchment record + character inference for a CONFIRMED station - BGS
- * point geology (tier 6) is only fetched when the catchment-only (tier 5)
+ * Full catchment record + character inference for a CONFIRMED station. Two
+ * independent things happen alongside the catchment record: the real
+ * measured-water-quality tier (fetchSiteConcentration) runs in parallel
+ * with it, since it doesn't depend on anything the catchment record says -
+ * it's a different tier in the hierarchy entirely (BUILD.md's rebuild-
+ * phase reasoning), not a fallback from it. BGS point geology (tier 6) is
+ * different again: it only gets fetched when the catchment-only (tier 5)
  * reading is actually worth corroborating (see character.ts's
- * worthCorroboratingWithGeology). That decision needs the catchment record
- * first, so this is two sequential steps rather than one parallel fetch:
- * most of the cost of tier 6 is only paid when it can actually change the
- * answer.
+ * worthCorroboratingWithGeology), which needs the catchment record first -
+ * so that one call stays sequential, paying its cost only when it can
+ * actually change the answer.
  */
 export async function screenStation(station: NrfaStation): Promise<StationScreenResult> {
-  const fullRecord = await fetchNrfaFullRecord(station.id);
+  const [fullRecord, siteConcentration] = await Promise.all([
+    fetchNrfaFullRecord(station.id),
+    fetchSiteConcentration(station.easting, station.northing),
+  ]);
   const catchment = fromNrfaRecord(fullRecord ?? { id: station.id, name: station.name });
 
   const corroboration = worthCorroboratingWithGeology(catchment)
@@ -293,6 +337,7 @@ export async function screenStation(station: NrfaStation): Promise<StationScreen
     catchment,
     geologyStatement: corroboration?.statement ?? null,
     geologyConsulted: Boolean(corroboration),
+    siteConcentration,
     characterInference,
   };
 }
@@ -306,6 +351,7 @@ export type PointGeologyFailure = { ok: false; stage: "no-geology-data"; message
 export interface PointGeologySuccess {
   ok: true;
   geologyStatement: string;
+  siteConcentration?: SiteConcentration;
   characterInference: CharacterInference;
 }
 
@@ -316,10 +362,15 @@ export type PointGeologyResult = PointGeologySuccess | PointGeologyFailure;
  * small or urban watercourse with no NRFA gauge nearby. Needs no
  * confirmation step (resolution.needsConfirmation is already false for
  * "none" - there is no candidate to choose between, only the presence or
- * absence of mapped geology at the one point already geocoded).
+ * absence of mapped geology at the one point already geocoded). The real
+ * measured-water-quality tier is independent of whether a gauge exists, so
+ * it's fetched here too, in parallel with the BGS lookup.
  */
 export async function screenPointGeology(easting: number, northing: number): Promise<PointGeologyResult> {
-  const corroboration = await fetchGeologyCorroboration(easting, northing);
+  const [corroboration, siteConcentration] = await Promise.all([
+    fetchGeologyCorroboration(easting, northing),
+    fetchSiteConcentration(easting, northing),
+  ]);
   if (!corroboration) {
     return {
       ok: false,
@@ -330,6 +381,7 @@ export async function screenPointGeology(easting: number, northing: number): Pro
   return {
     ok: true,
     geologyStatement: corroboration.statement,
+    siteConcentration,
     characterInference: inferCharacterFromGeologyOnly(corroboration),
   };
 }

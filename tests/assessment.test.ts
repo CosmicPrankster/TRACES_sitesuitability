@@ -118,6 +118,44 @@ describe("assessSite", () => {
   });
 });
 
+describe("assessMembrane: a real measured site concentration (rebuild phase 3) improves the baseline, never the uplift", () => {
+  const siteConcentration = { mgL: 42, source: "EA Water Quality Archive, Test Point, 2024-01-01" };
+
+  it("uses the real concentration instead of the calibration's reference mean, and says so", () => {
+    const withReal = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations, siteConcentration);
+    const withoutReal = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations);
+    expect(withReal.baselineVolume).not.toBeNull();
+    expect(withReal.baselineVolume).not.toEqual(withoutReal.baselineVolume);
+    expect(withReal.baselineReasoning).toMatch(/real measured solids concentration/i);
+    expect(withReal.baselineReasoning).toMatch(/42 mg\/L/);
+    expect(withReal.baselineReasoning).toMatch(siteConcentration.source);
+  });
+
+  it("raises baseline confidence from low to medium with a real concentration alone (PSD still guessed)", () => {
+    const withoutReal = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations);
+    const withReal = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations, siteConcentration);
+    expect(withoutReal.baselineConfidence).toBe("low");
+    expect(withReal.baselineConfidence).toBe("medium");
+  });
+
+  it("does not touch the uplift multipliers or their reasoning - this is a baseline-only input", () => {
+    const withReal = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations, siteConcentration);
+    const withoutReal = assessMembrane(psdForCharacter("sand"), fiveUm, [fiveMm], calibrations);
+    expect(withReal.uplifts).toEqual(withoutReal.uplifts);
+  });
+
+  it("stays insufficient-data (null) for a pore size no trial calibrates, even with a real concentration", () => {
+    const withReal = assessMembrane(psdForCharacter("sand"), twentyUm, [fiveMm], calibrations, siteConcentration);
+    expect(withReal.baselineVolume).toBeNull();
+  });
+
+  it("assessSite threads the real concentration through to every membrane", () => {
+    const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, trials, siteConcentration);
+    const five = assessments.find((a) => a.membraneId === "5um")!;
+    expect(five.baselineReasoning).toMatch(/real measured solids concentration/i);
+  });
+});
+
 describe("assessMembrane: membrane retention (block 5c) feeds straight into the uplift", () => {
   it("a supplier-stated retention size changes the confidence, not just the number", () => {
     const populated: Membrane = {

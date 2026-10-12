@@ -149,10 +149,53 @@ signature (Azure gateway 403, body containing "Azure-Application-Gateway")
 up to twice more with a short backoff - and ONLY that signature, so a real
 403 from the API itself is never silently retried away.
 
-Still waiting on one real observation record's actual shape (field names
-for the determinand, value, unit, date) before building
-`lib/sources/water-quality.ts` - the retry should get past the gateway
-flakiness on the next run.
+A third run got past the gateway flakiness on the observation fetch (the
+determinand-codelist calls still 403'd, all three attempts - but that
+turned out not to matter, see below) and returned a real observation
+record for SO-F0002057 (the real point on the River Rother found above):
+`phenomenonTime` (ISO datetime of the actual sample, not the publish
+date), `observedProperty.notation`/`prefLabel` (the determinand, self-
+described on every record), `hasResult.numericValue` or `.upperBound`/
+`.lowerBound` for a censored "less than" result (a real example: `BOD : 5
+Day ATU`, `<3 mg/l`), and `hasResult.hasUnit.prefLabel`. The record's own
+`hasSamplingPoint.geometry.asWKT` gave a second, independent real BNG
+coordinate for the same point (`POINT(495650 120150)`), which matched the
+search result's own lon/lat to within about 2 metres once run through a
+new `bngToWgs84` inverse transform (`scripts/lib/bng.mjs`) - a free cross-
+check that the new inverse transform is correct, not just that it round-
+trips its own forward function.
+
+**`lib/sources/water-quality.ts` built and wired in.** Decided NOT to
+depend on the determinand codelist at all, given its flakiness: every
+observation record already self-describes its own determinand label and
+unit, so turbidity and suspended-solids-concentration readings are
+classified client-side on that real text (`classifyReadings`) rather than
+a memorised notation code - more robust, and sidesteps the gateway issue
+entirely. Turbidity (optical, NTU/FNU) and suspended-solids concentration
+(gravimetric, mg/L) are kept as two separate, honestly labelled lists -
+never conflated, since `lib/baseline.ts`'s `siteConcentrationMgL` needs
+the latter specifically. The real suspended-solids mg/L determinand's own
+notation code is still unconfirmed (the codelist lookup for it never got
+past the gateway in three attempts) - not blocking, since nothing here
+depends on knowing it in advance.
+
+Wired into the actual scoring path: `screenStation`/`screenPointGeology`
+(`lib/live-site.ts`) now also fetch the nearest real river point's most
+recent suspended-solids reading in parallel with the NRFA/BGS tiers, and
+`assessSite`/`assessMembrane` (`lib/assessment.ts`) use it in place of the
+calibration set's reference concentration when present - baseline
+confidence now reaches `medium` with a real concentration alone (even with
+a guessed PSD) and `high` when both PSD and concentration are real, per
+the ceiling `lib/baseline.ts` already anticipated in its own comments
+before this phase. A censored ("less than") reading is used at its upper
+bound - the conservative direction, since it can only make the predicted
+volume lower than reality, never overclaim.
+
+12 new tests (`tests/water-quality.test.ts`, `tests/bng.test.ts`, plus 5
+more in `tests/assessment.test.ts`) against real captured fixtures where
+real data existed, clearly-labelled synthetic fixtures (built from real
+determinand codes) where it didn't. 237/237 tests pass, `tsc --noEmit` and
+`next build` both clean.
 
 ### Two findings that mattered more than the pass/fail list
 

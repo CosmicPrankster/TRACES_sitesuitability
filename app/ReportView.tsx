@@ -40,6 +40,8 @@ interface Screened {
   geologyStatement: string | null;
   /** Absent for the geology-only path, where point geology is the only tier there is. */
   geologyConsulted?: boolean;
+  /** A real measured solids concentration near the site (EA Water Quality Archive), if one was found - see lib/live-site.ts's fetchSiteConcentration. */
+  siteConcentration?: { mgL: number; source: string } | null;
   characterInference: CharacterInference;
   psd: Psd;
   assessments: MembraneAssessment[];

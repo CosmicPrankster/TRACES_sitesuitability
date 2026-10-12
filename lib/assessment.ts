@@ -9,6 +9,7 @@ import {
   foulingLoadForMembrane,
   predictBaselineVolume,
   type BaselineCalibration,
+  type SiteConcentration,
   type VolumeRange,
 } from "./baseline";
 
@@ -268,19 +269,31 @@ export function assessMembrane(
   membrane: Membrane,
   hydrocyclones: Hydrocyclone[],
   calibrations: BaselineCalibration[],
+  siteConcentration?: SiteConcentration,
 ): MembraneAssessment {
   const { foulingLoad } = foulingLoadForMembrane(psd, membrane);
   const calibration = calibrations.find((c) => c.poreSizeUm === membrane.poreSizeUm);
-  const baselineVolume = predictBaselineVolume(calibration, foulingLoad);
+  const baselineVolume = predictBaselineVolume(calibration, foulingLoad, siteConcentration?.mgL);
 
-  const baselineConfidence: Confidence = baselineVolume
-    ? psd.status === "measured"
-      ? "medium" // real PSD, but still assumes a reference concentration - never high without a real site concentration too
-      : "low"
-    : "low";
+  // Never an average of the two factors - the weaker one caps it, same
+  // discipline as overallConfidence above. A real measured concentration
+  // is worth a step up even with a guessed PSD (medium, not low); both
+  // real together is the one case allowed to reach high - see the
+  // predictBaselineVolume caller contract in lib/baseline.ts.
+  const psdIsMeasured = psd.status === "measured";
+  const concentrationIsReal = Boolean(siteConcentration);
+  const baselineConfidence: Confidence = !baselineVolume
+    ? "low"
+    : psdIsMeasured && concentrationIsReal
+      ? "high"
+      : psdIsMeasured || concentrationIsReal
+        ? "medium"
+        : "low";
 
   const baselineReasoning = baselineVolume
-    ? `Calibrated against ${calibration!.anchorTrialCount} real bench trials at this membrane's pore size, scaled to this feed's predicted fouling load. Assumes a reference solids concentration (${calibration!.referenceConcentrationMgL.toFixed(0)} mg/L, the calibration trials' own mean) because no measured concentration exists for this site yet - that is the main reason this stays low confidence even with a real calibration behind it.`
+    ? siteConcentration
+      ? `Calibrated against ${calibration!.anchorTrialCount} real bench trials at this membrane's pore size, scaled to this feed's predicted fouling load, using a real measured solids concentration near this site (${siteConcentration.mgL.toFixed(0)} mg/L, ${siteConcentration.source}) rather than the calibration trials' own reference concentration.`
+      : `Calibrated against ${calibration!.anchorTrialCount} real bench trials at this membrane's pore size, scaled to this feed's predicted fouling load. Assumes a reference solids concentration (${calibration!.referenceConcentrationMgL.toFixed(0)} mg/L, the calibration trials' own mean) because no measured concentration exists for this site yet - that is the main reason this stays low confidence even with a real calibration behind it.`
     : `No recorded trial used a ${membrane.poreSizeUm} µm filter, so there is no real calibration anchor for an absolute volume at this pore size - insufficient data, not a guessed number. The relative uplift below does not depend on this.`;
 
   const uplifts = hydrocyclones.map((h) => assessUplift(psd, membrane, h));
@@ -295,8 +308,9 @@ export function assessSite(
   membranes: Membrane[],
   hydrocyclones: Hydrocyclone[],
   trials: Trial[],
+  siteConcentration?: SiteConcentration,
 ): MembraneAssessment[] {
   const membranesByPoreSize = new Map(membranes.map((m) => [m.poreSizeUm, m]));
   const calibrations = calibrateBaselines(trials, membranesByPoreSize);
-  return membranes.map((m) => assessMembrane(psd, m, hydrocyclones, calibrations));
+  return membranes.map((m) => assessMembrane(psd, m, hydrocyclones, calibrations, siteConcentration));
 }

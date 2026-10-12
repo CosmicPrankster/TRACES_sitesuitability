@@ -45,7 +45,7 @@ export async function GET(request: Request) {
     const membranes = loadMembranes();
     const trials = loadTrials();
     const psd = psdForCharacter(pointGeology.characterInference.character);
-    const assessments = assessSite(psd, membranes, hydrocyclones, trials);
+    const assessments = assessSite(psd, membranes, hydrocyclones, trials, pointGeology.siteConcentration);
     const report = buildReport(psd, assessments, membranes);
 
     return NextResponse.json({
@@ -56,6 +56,7 @@ export async function GET(request: Request) {
         matchedOn: params.get("matchedOn") ?? "",
       },
       geologyStatement: pointGeology.geologyStatement,
+      siteConcentration: pointGeology.siteConcentration ?? null,
       characterInference: pointGeology.characterInference,
       psd,
       assessments,
@@ -93,7 +94,7 @@ export async function GET(request: Request) {
   const membranes = loadMembranes();
   const trials = loadTrials();
   const psd = psdForCharacter(screened.characterInference.character);
-  const assessments = assessSite(psd, membranes, hydrocyclones, trials);
+  const assessments = assessSite(psd, membranes, hydrocyclones, trials, screened.siteConcentration);
   const report = buildReport(psd, assessments, membranes);
 
   return NextResponse.json({
@@ -101,6 +102,7 @@ export async function GET(request: Request) {
     station: screened.station,
     geologyStatement: screened.geologyStatement,
     geologyConsulted: screened.geologyConsulted,
+    siteConcentration: screened.siteConcentration ?? null,
     characterInference: screened.characterInference,
     psd,
     assessments,

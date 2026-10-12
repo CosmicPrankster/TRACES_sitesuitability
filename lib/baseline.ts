@@ -48,6 +48,18 @@ export interface VolumeRange {
   highMl: number;
 }
 
+/**
+ * A real, measured solids concentration near the site, in place of the
+ * calibration set's own reference concentration (lib/sources/water-
+ * quality.ts, rebuild phase 3 - the EA Water Quality Archive). `source` is
+ * shown verbatim in the baseline reasoning, so it should name where and
+ * when the reading came from, not just restate the number.
+ */
+export interface SiteConcentration {
+  mgL: number;
+  source: string;
+}
+
 export interface BaselineCalibration {
   poreSizeUm: number;
   /** Geometric mean k, and the full real spread from the anchor trials. */
@@ -142,8 +154,9 @@ export function calibrateBaselines(trials: Trial[], membranesByPoreSize: Map<num
  * anchor exists for this membrane's pore size. Returns null - insufficient
  * data - otherwise. `siteConcentrationMgL` defaults to the calibration's
  * own reference concentration when the site's real concentration is
- * unknown (true today for every site - no measured-water-quality source
- * is wired in yet); callers should treat that default case as a further
+ * unknown - still true for most sites, since a real reading depends on a
+ * usable EA Water Quality Archive point existing nearby (lib/sources/
+ * water-quality.ts); callers should treat that default case as a further
  * reason to keep confidence low, not just the usual PSD/cut-size caveats.
  */
 export function predictBaselineVolume(

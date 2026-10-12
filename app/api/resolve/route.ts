@@ -45,7 +45,7 @@ export async function GET(request: Request) {
   const membranes = loadMembranes();
   const trials = loadTrials();
   const psd = psdForCharacter(pointGeology.characterInference.character);
-  const assessments = assessSite(psd, membranes, hydrocyclones, trials);
+  const assessments = assessSite(psd, membranes, hydrocyclones, trials, pointGeology.siteConcentration);
   const report = buildReport(psd, assessments, membranes);
 
   return NextResponse.json({
@@ -53,6 +53,7 @@ export async function GET(request: Request) {
     source: "geology-only",
     geocode: matched.geocode,
     geologyStatement: pointGeology.geologyStatement,
+    siteConcentration: pointGeology.siteConcentration ?? null,
     characterInference: pointGeology.characterInference,
     psd,
     assessments,
