@@ -16,7 +16,7 @@ how things were probed and built, not a living status doc.
 
 ```bash
 npm install
-npm test                       # 308 tests, no network needed
+npm test                       # 338 tests, no network needed
 npm run dev                    # the web app, http://localhost:3000
 npm run build-query-log        # regenerate data/query-log.json's bench-validation entries
 node --env-file=.env.local scripts/probe-new-sources.mjs   # needs internet + optional API keys
@@ -77,7 +77,7 @@ boundary (see `lib/character.ts`'s `worthCorroboratingWithGeology`).
 | 3 | NRFA catchment properties + BGS point geology (bedrock, base flow, arable %) | **live** — `lib/character.ts`, `lib/geology.ts` |
 | — | Tide state (estuaries: flood/ebb, spring/neap) — confidence context, not a verdict input | **live, verified against a real key** — `lib/sources/tide.ts` |
 | — | Algae / organic-inhibition flags — independent of the mineral verdict | **live** — `lib/flags.ts` |
-| — | Satellite turbidity (Sentinel-2/3) | **not built** — OAuth2 and the base statistics endpoint are both proven live; only the bbox/resolution request shape is still being corrected, see HANDOFF.md |
+| — | Satellite turbidity (Sentinel-2 NDTI) — area-averaged context, gated to sites near a tide station, never a verdict input | **live, verified against a real key** — `lib/sources/satellite-turbidity.ts` |
 | — | Soil texture (Soilscapes/UKSO) | **dropped** — no working source found; see BUILD.md |
 
 Every tier names its own confidence and what would improve it. Nothing
@@ -118,6 +118,7 @@ lib/
   sources/
     water-quality.ts            EA Water Quality Archive fetcher
     tide.ts                     Admiralty UK Tidal API fetcher
+    satellite-turbidity.ts      Copernicus/Sentinel Hub NDTI fetcher, gated on a nearby tide station
 
 app/
   page.tsx, ReportView.tsx     the web app (Next.js)
@@ -131,7 +132,7 @@ scripts/
   build-query-log.ts           regenerate data/query-log.json's bench-validation entries (npx tsx scripts/build-query-log.ts)
   lib/bng.mjs                  British National Grid ↔ WGS84, both directions
 
-tests/            one file per lib/ module, 308 tests total, no network
+tests/            one file per lib/ module, 338 tests total, no network
 ```
 
 ## Running it
@@ -143,8 +144,9 @@ Missing a key means that tier is skipped, not broken:
 
 - `ADMIRALTY_TIDE_API_KEY` — tide state for estuarine sites (free tier at
   [developer.admiralty.co.uk](https://developer.admiralty.co.uk/)); **verified live**
-- `COPERNICUS_CLIENT_ID` / `COPERNICUS_CLIENT_SECRET` — not yet used by any
-  live tier (satellite turbidity isn't built); only `scripts/probe-new-sources.mjs` uses these today
+- `COPERNICUS_CLIENT_ID` / `COPERNICUS_CLIENT_SECRET` — satellite turbidity
+  (`lib/sources/satellite-turbidity.ts`); **verified live**, only fetched for a
+  site that already has a nearby tide station (see the file's own header for why)
 
 ## Adding your own data
 
@@ -197,14 +199,15 @@ plain-language log on each card.
    `lib/sources/tide.ts`'s types exactly, no code changes needed. Tilford
    itself correctly found no station within 5 km (it's the upper, non-tidal
    Wey) and skipped the tier - exactly the intended behaviour, not a bug.
-4. **Satellite turbidity - two guesses down, converging.** v1 (EPSG:4326
-   bbox) got a pixel-size HTTP 400. v2 fixed that (bbox in EPSG:3857,
-   metres) and the pixel-size error is gone, replaced by a new, different
-   real error: `"Output dataMask requested but missing from function
-   setup()"` - the Statistical API needs an explicit `dataMask` output in
-   the evalscript, not just as an input. v3 (`scripts/probe-new-
-   sources.mjs`) adds that - still unproven until it's run again. See
-   HANDOFF.md for the full diagnosis.
+4. ~~**Satellite turbidity**~~ — done, after three real probe rounds (v1:
+   pixel-size error, bbox read in the wrong CRS units; v2: fixed that, hit
+   a missing-`dataMask`-output error; v3: fixed that too, got a real HTTP
+   200 with real NDTI data). `lib/sources/satellite-turbidity.ts` is built
+   on that proven v3 shape and wired into `lib/live-site.ts`, gated behind
+   an already-found nearby tide station (see the file's own header for
+   why) - and reported as context only, like tide state, never blended
+   into the mineral-character verdict: NDTI is a relative index averaged
+   across a ~2.2 km box, not a point measurement or a concentration.
 5. ~~**The chat/conversational layer**~~ — done. `lib/chat-intake.ts` is a
    deterministic free-text parser on top of `lib/field-update.ts`, wired
    into `/api/field-update` and a textarea in the UI - parses a message

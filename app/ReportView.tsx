@@ -52,6 +52,13 @@ interface Screened {
     springNeap: "closer-to-spring" | "closer-to-neap" | "mid-cycle" | "unknown";
     reasoning: string;
   } | null;
+  /** Satellite turbidity (lib/sources/satellite-turbidity.ts) - null for an inland site, or when no Copernicus credentials are set. Context only, never scored. */
+  satelliteTurbidity?: {
+    ndtiMean: number;
+    sampleCount: number;
+    noDataCount: number;
+    reasoning: string;
+  } | null;
   characterInference: CharacterInference;
   psd: Psd;
   assessments: MembraneAssessment[];
@@ -270,6 +277,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
           siteConcentration: data.siteConcentration,
           flags: data.flags,
           tideState: data.tideState,
+          satelliteTurbidity: data.satelliteTurbidity,
           characterInference: data.characterInference,
           psd: data.psd,
           assessments: data.assessments,
@@ -477,6 +485,14 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
                 <strong>Tide state:</strong> {live.tideState.station.name} tide station,{" "}
                 {live.tideState.station.distanceKm.toFixed(1)} km away - {live.tideState.phase}, {live.tideState.springNeap}.{" "}
                 <span className="hint">{live.tideState.reasoning}</span>
+              </p>
+            )}
+            {live.satelliteTurbidity && (
+              <p>
+                <strong>Satellite turbidity (context only, not scored):</strong> NDTI mean{" "}
+                {live.satelliteTurbidity.ndtiMean.toFixed(3)} ({live.satelliteTurbidity.sampleCount} of{" "}
+                {live.satelliteTurbidity.sampleCount + live.satelliteTurbidity.noDataCount} pixels cloud-free).{" "}
+                <span className="hint">{live.satelliteTurbidity.reasoning}</span>
               </p>
             )}
           </div>

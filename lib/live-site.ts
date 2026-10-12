@@ -24,6 +24,7 @@ import { screenRiverWaterQuality } from "./sources/water-quality";
 import type { SiteConcentration } from "./baseline";
 import { assessSiteFlags, type SiteFlags } from "./flags";
 import { screenTideState, type TideState } from "./sources/tide";
+import { screenSatelliteTurbidity, type SatelliteTurbidity } from "./sources/satellite-turbidity";
 
 /**
  * BLOCK 6, site input - the live version of scripts/probe.mjs's data path,
@@ -193,6 +194,33 @@ async function fetchTideState(easting: number, northing: number): Promise<TideSt
   return state ?? undefined;
 }
 
+/**
+ * Satellite turbidity (lib/sources/satellite-turbidity.ts, rebuild phase 6
+ * - proven live 2026-10-12 after three real probe rounds, see HANDOFF.md)
+ * - undefined whenever there's nothing to report: no
+ * COPERNICUS_CLIENT_ID/SECRET set, or (checked first, cheaper) no nearby
+ * tide station. Deliberately gated behind `tideState` rather than fetched
+ * independently: the Statistical API aggregates NDTI across an entire
+ * ~2.2 km box, which only means something when that box is plausibly
+ * water-dominated - this reuses the already-proven "nearby a real tide
+ * station" signal as that proxy, rather than inventing a second, unproven
+ * land/water classifier (see lib/sources/satellite-turbidity.ts's header).
+ * This also keeps the extra OAuth2 round-trip off the common case: most
+ * sites this tool screens are inland and never reach this call at all.
+ */
+async function fetchSatelliteTurbidity(
+  easting: number,
+  northing: number,
+  tideState: TideState | undefined,
+): Promise<SatelliteTurbidity | undefined> {
+  if (!tideState) return undefined;
+  const clientId = process.env.COPERNICUS_CLIENT_ID;
+  const clientSecret = process.env.COPERNICUS_CLIENT_SECRET;
+  if (!clientId || !clientSecret) return undefined;
+  const result = await screenSatelliteTurbidity(easting, northing, clientId, clientSecret);
+  return result ?? undefined;
+}
+
 /* ------------------------------------------------------------------ */
 /* Step 1: match - cheap, never commits to a station                   */
 /* ------------------------------------------------------------------ */
@@ -317,6 +345,8 @@ export interface StationScreenSuccess {
   flags: SiteFlags;
   /** Tide state (lib/sources/tide.ts, rebuild phase 5) - undefined for an ordinary inland site, or when no API key is set. See fetchTideState. */
   tideState?: TideState;
+  /** Satellite turbidity (lib/sources/satellite-turbidity.ts, rebuild phase 6) - undefined for an ordinary inland site (no tideState to gate on), or when no Copernicus credentials are set. See fetchSatelliteTurbidity. */
+  satelliteTurbidity?: SatelliteTurbidity;
   characterInference: CharacterInference;
   /**
    * This station's own siteId/waterbodyId (lib/resolve.ts's
@@ -351,9 +381,12 @@ export async function screenStation(station: NrfaStation): Promise<StationScreen
   ]);
   const catchment = fromNrfaRecord(fullRecord ?? { id: station.id, name: station.name });
 
-  const corroboration = worthCorroboratingWithGeology(catchment)
-    ? await fetchGeologyCorroboration(station.easting, station.northing)
-    : undefined;
+  const [corroboration, satelliteTurbidity] = await Promise.all([
+    worthCorroboratingWithGeology(catchment)
+      ? fetchGeologyCorroboration(station.easting, station.northing)
+      : Promise.resolve(undefined),
+    fetchSatelliteTurbidity(station.easting, station.northing, tideState),
+  ]);
 
   const characterInference = inferCharacter(catchment, corroboration);
   if (!characterInference) {
@@ -378,6 +411,7 @@ export async function screenStation(station: NrfaStation): Promise<StationScreen
     siteConcentration,
     flags,
     tideState,
+    satelliteTurbidity,
     characterInference,
     site: deriveSiteIdentity(station),
   };
@@ -397,6 +431,8 @@ export interface PointGeologySuccess {
   flags: SiteFlags;
   /** Tide state (lib/sources/tide.ts) - this no-NRFA-gauge path is exactly where a tidal/estuarine site tends to land, since NRFA gauges exclude tidal reaches by design. */
   tideState?: TideState;
+  /** Satellite turbidity (lib/sources/satellite-turbidity.ts) - gated on tideState above; see fetchSatelliteTurbidity. */
+  satelliteTurbidity?: SatelliteTurbidity;
   characterInference: CharacterInference;
 }
 
@@ -429,6 +465,7 @@ export async function screenPointGeology(easting: number, northing: number): Pro
     null, // no NRFA catchment at all on this path - algae flag is honestly insufficient-data
     { bedrock: corroboration.bedrockLithology ?? null, superficial: corroboration.superficialLithology ?? null },
   );
+  const satelliteTurbidity = await fetchSatelliteTurbidity(easting, northing, tideState);
 
   return {
     ok: true,
@@ -436,6 +473,7 @@ export async function screenPointGeology(easting: number, northing: number): Pro
     siteConcentration,
     flags,
     tideState,
+    satelliteTurbidity,
     characterInference: inferCharacterFromGeologyOnly(corroboration),
   };
 }

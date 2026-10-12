@@ -62,13 +62,13 @@ hierarchy of sources that stops at the first tier with usable data. See
 each tier's live/untested/dropped status — it is not repeated here to avoid
 the two files drifting apart again.
 
-`npm test` — 325 tests, no network, no API keys.
+`npm test` — 338 tests, no network, no API keys.
 `npx tsc --noEmit` / `npx next build` — both clean.
 `node --env-file=.env.local scripts/probe-new-sources.mjs` — needs internet,
 optional API keys for the tide and satellite tiers.
 
-**Verified live since the above was written**, both against a real
-`"Tilford, River Wey"` probe run (2026-10-12):
+**Verified live since the above was written**, all against real
+`"Tilford, River Wey"` probe runs (2026-10-12):
 - The chat/conversational layer (`lib/chat-intake.ts`) is built and wired
   into `/api/field-update` and the UI - a deterministic parser, not an LLM
   call (this project has no AI SDK dependency), on the standing rule that
@@ -79,23 +79,30 @@ optional API keys for the tide and satellite tiers.
   Tilford itself correctly found no station within 5 km and skipped the
   tier, which is the correct behaviour for an inland, non-tidal reach, not
   a bug.
+- **Satellite turbidity is proven and built, after three real probe
+  rounds, each surfacing a real, different, fixable error - never a repeat
+  of the last one, which is what "converging" actually looks like.** v1
+  (bbox in EPSG:4326, bare `resx`/`resy`): a pixel-size HTTP 400 - `resx`/
+  `resy` was being read in the bbox's own CRS units (degrees), not metres.
+  v2 (bbox switched to EPSG:3857): that error vanished, replaced by
+  `"Output dataMask requested but missing from function setup()"` - the
+  Statistical API requires an evalscript to declare an EXPLICIT `dataMask`
+  output, not just take it as an input. v3 (explicit `data`+`dataMask`
+  outputs): a real HTTP 200, real NDTI statistics (mean -0.049, 48,400
+  valid pixels, 0 no-data, for a 30-day window around Tilford).
+  `lib/sources/satellite-turbidity.ts` is built on that proven v3 shape,
+  with the real captured response as its test fixture
+  (`tests/satellite-turbidity.test.ts`), and wired into `lib/live-site.ts`
+  - but deliberately gated behind an already-found nearby tide station
+  (reusing that proven "estuarine" signal as a proxy for "the aggregation
+  box is plausibly water-dominated," rather than inventing a second,
+  unproven land/water classifier) and reported as CONTEXT ONLY, exactly
+  like tide state: NDTI is a relative turbidity index averaged across a
+  ~2.2 km box, not a point reading or a concentration, and is never
+  blended into the mineral-character verdict. See the module's own header
+  comment for the full reasoning.
 
 **Still genuinely open**, not yet built:
-- The satellite-turbidity data-query shape - two real rounds in, close but
-  not proven yet. v1 (EPSG:4326 bbox, bare resx/resy): a pixel-size HTTP
-  400 traced to `resx`/`resy` being read in the bbox's own CRS units
-  (degrees) rather than metres. v2 (bbox switched to EPSG:3857, metres):
-  that error is GONE - proof the fix was right - but a new, different real
-  error appeared: `"Output dataMask requested but missing from function
-  setup()"`. The Statistical API (unlike the plain Process API) requires an
-  evalscript to declare an explicit `dataMask` output alongside its data
-  output, not just take it as an input, so it knows which pixels to
-  exclude from the aggregated statistics. v3 (`scripts/probe-new-
-  sources.mjs`) adds that - explicit `output: [{id:"data"...}, {id:
-  "dataMask"...}]` and `evaluatePixel` returning `{data, dataMask}` instead
-  of a bare array - still not proven until it's run again. Each round has
-  gotten a real, specific, different error back, never a repeat of the
-  last one - the right signal that this is converging, not stuck.
 - `data/query-log.json`'s "site-run" half (a real screened site's prediction
   checked against reality) - the "bench-validation" half, checked against
   every real trial in `data/trials.json`, is built (`scripts/build-query-
@@ -121,6 +128,8 @@ optional API keys for the tide and satellite tiers.
    │     ├─ NRFA catchment properties (lib/character.ts)  tier 3
    │     ├─ BGS point geology (lib/geology.ts)             tier 4, corroborates only
    │     ├─ tide state (lib/sources/tide.ts)               confidence context, estuaries
+   │     ├─ satellite turbidity (lib/sources/           confidence context, gated on
+   │     │     satellite-turbidity.ts)                    a nearby tide station
    │     └─ algae/inhibition flags (lib/flags.ts)          independent of the mineral verdict
    │
    ├─ lib/psd.ts            character → assumed particle size distribution
@@ -151,12 +160,11 @@ actually been run. It was deleted and restarted. They held up through the
 to relax them.
 
 1. **A source that has not been proven to respond is not built on.** Every
-   new tier this project has ever added (EA Water Quality, tide, satellite)
-   was probed live with `scripts/probe*.mjs` before a line of production
-   code was written against it. Satellite turbidity still has no production
-   code for exactly this reason — the OAuth2 step and the Statistical API
-   endpoint itself are proven, but the request shape it actually accepts
-   (bbox/resolution units) is not, yet.
+   tier this project has ever added (EA Water Quality, tide, satellite) was
+   probed live with `scripts/probe*.mjs` before a line of production code
+   was written against it - satellite turbidity took three real rounds
+   (see "Where the project stands" above) before its request shape was
+   actually proven, and no production code existed for it until it was.
 2. **Never report an empty response as a success.** The v1 probe did, and it
    hid the single most important failure for days.
 3. **Every number carries its status** — `guessed`, `field-adjusted`,
