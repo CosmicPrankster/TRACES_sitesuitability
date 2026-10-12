@@ -104,16 +104,28 @@ describe("assessSite", () => {
     }
   });
 
-  it("gives the one membrane a real trial calibrates (5um) a non-null baseline volume", () => {
+  it("gives the one membrane a real trial calibrates (5um) a non-null, MEASURED baseline volume", () => {
     const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, trials);
     const five = assessments.find((a) => a.membraneId === "5um")!;
     expect(five.baselineVolume).not.toBeNull();
+    expect(five.baselineSource).toBe("measured");
   });
 
-  it("honestly returns insufficient-data (null) baseline volume for a pore size no trial used", () => {
+  it("ESTIMATES (rebuild phase 10), rather than leaving blank, a pore size no trial used - borrowing the 5um calibration, corrected for sediment class, always low confidence", () => {
     const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, trials);
     const twenty = assessments.find((a) => a.membraneId === "20um")!;
+    expect(twenty.baselineVolume).not.toBeNull();
+    expect(twenty.baselineSource).toBe("estimated");
+    expect(twenty.baselineConfidence).toBe("low");
+    expect(twenty.baselineReasoning).toMatch(/ESTIMATED/);
+    expect(twenty.baselineReasoning).toMatch(/not a measurement/i);
+  });
+
+  it("is genuinely insufficient-data (null), not estimated, when there is no real trial at ANY pore size to anchor from", () => {
+    const assessments = assessSite(psdForCharacter("sand"), membranes, cyclones, []);
+    const twenty = assessments.find((a) => a.membraneId === "20um")!;
     expect(twenty.baselineVolume).toBeNull();
+    expect(twenty.baselineSource).toBe("insufficient-data");
     expect(twenty.baselineReasoning).toMatch(/insufficient data/i);
   });
 });
@@ -144,9 +156,11 @@ describe("assessMembrane: a real measured site concentration (rebuild phase 3) i
     expect(withReal.uplifts).toEqual(withoutReal.uplifts);
   });
 
-  it("stays insufficient-data (null) for a pore size no trial calibrates, even with a real concentration", () => {
+  it("ESTIMATES rather than nulling out for a pore size no trial calibrates, even with a real concentration - but stays low confidence regardless", () => {
     const withReal = assessMembrane(psdForCharacter("sand"), twentyUm, [fiveMm], calibrations, siteConcentration);
-    expect(withReal.baselineVolume).toBeNull();
+    expect(withReal.baselineVolume).not.toBeNull();
+    expect(withReal.baselineSource).toBe("estimated");
+    expect(withReal.baselineConfidence).toBe("low");
   });
 
   it("assessSite threads the real concentration through to every membrane", () => {

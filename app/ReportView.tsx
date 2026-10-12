@@ -686,7 +686,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
                   <td>
                     <button
                       type="button"
-                      className={`cell ${a.baselineVolume ? "cell-strong" : "cell-insufficient"} ${baselineSelected ? "cell-selected" : ""}`}
+                      className={`cell ${a.baselineVolume ? (a.baselineSource === "estimated" ? "cell-marginal" : "cell-strong") : "cell-insufficient"} ${baselineSelected ? "cell-selected" : ""}`}
                       onClick={() => setSelected(baselineSelected ? null : { membraneId: m.id })}
                     >
                       {a.baselineVolume ? (
@@ -694,7 +694,10 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
                           <span className="cell-verdict">
                             {a.baselineVolume.lowMl.toFixed(0)}-{a.baselineVolume.highMl.toFixed(0)} mL
                           </span>
-                          <span className="cell-ratio">{a.baselineConfidence}</span>
+                          <span className="cell-ratio">
+                            {a.baselineConfidence}
+                            {a.baselineSource === "estimated" ? " (estimated)" : ""}
+                          </span>
                         </>
                       ) : (
                         <span className="cell-verdict">No data</span>

@@ -1,6 +1,7 @@
 import type { Membrane, Trial } from "./data";
 import { binDistribution, Z90, type Psd } from "./psd";
 import { membraneRetention } from "./retention";
+import { characterCorrectionFactor, grainSizeClassForD50, type GrainSizeClass } from "./sediment-properties";
 
 /**
  * BLOCK 6, rebuild phase 1 - the baseline: how much water the filter alone
@@ -171,5 +172,60 @@ export function predictBaselineVolume(
     lowMl: calibration.kLow / Math.sqrt(c * alpha),
     midMl: calibration.kMid / Math.sqrt(c * alpha),
     highMl: calibration.kHigh / Math.sqrt(c * alpha),
+  };
+}
+
+export interface BaselineEstimate {
+  volume: VolumeRange;
+  sedimentClass: GrainSizeClass;
+  /** Which real calibration this estimate borrows its apparatus-constant k from. */
+  anchorPoreSizeUm: number;
+  anchorTrialCount: number;
+}
+
+/**
+ * ESTIMATES a baseline volume at a pore size no real trial has calibrated,
+ * for a site whose inferred sediment sits in a different grain-size class
+ * than the trial feed's own (lib/sediment-properties.ts). Per the user's
+ * own framing (rebuild phase 10): a UK-wide tool cannot wait for a bench
+ * trial everywhere, so this infers from published literature rather than
+ * leaving every uncalibrated pore size blank - clearly labelled as an
+ * estimate (see lib/assessment.ts's baselineSource), and always superseded
+ * by a real trial calibration the moment one exists, same as every other
+ * "measured beats modelled" rule in this project.
+ *
+ * `anchor` should be whichever real calibration has the most trials behind
+ * it (today, with every real trial at 5 um, there is only one choice) -
+ * its own k already captures the apparatus constants (filter area,
+ * pressure, Kozeny's own K, unit conversions); this function only
+ * corrects for how the TARGET site's sediment class differs from the
+ * trial feed's, via lib/sediment-properties.ts's porosity/density ratio.
+ * Only the calibration's OWN kMid is used, not its kLow/kHigh spread - the
+ * output range reflects the real published porosity uncertainty for the
+ * target class instead, so the range stays interpretable as one clearly-
+ * named source of uncertainty, not two conflated ones.
+ */
+export function estimateBaselineVolume(
+  anchor: BaselineCalibration,
+  alpha: number,
+  psdD50Um: number,
+  siteConcentrationMgL?: number,
+): BaselineEstimate | null {
+  if (!(alpha > 0) || !(psdD50Um > 0)) return null;
+  const c = siteConcentrationMgL ?? anchor.referenceConcentrationMgL;
+  if (!(c > 0)) return null;
+
+  const sedimentClass = grainSizeClassForD50(psdD50Um);
+  const correction = characterCorrectionFactor(sedimentClass);
+
+  return {
+    volume: {
+      lowMl: (anchor.kMid * correction.low) / Math.sqrt(c * alpha),
+      midMl: (anchor.kMid * correction.mid) / Math.sqrt(c * alpha),
+      highMl: (anchor.kMid * correction.high) / Math.sqrt(c * alpha),
+    },
+    sedimentClass,
+    anchorPoreSizeUm: anchor.poreSizeUm,
+    anchorTrialCount: anchor.anchorTrialCount,
   };
 }

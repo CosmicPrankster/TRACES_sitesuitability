@@ -16,7 +16,7 @@ how things were probed and built, not a living status doc.
 
 ```bash
 npm install
-npm test                       # 338 tests, no network needed
+npm test                       # 362 tests, no network needed
 npm run dev                    # the web app, http://localhost:3000
 npm run build-query-log        # regenerate data/query-log.json's bench-validation entries
 node --env-file=.env.local scripts/probe-new-sources.mjs   # needs internet + optional API keys
@@ -44,25 +44,31 @@ decimals):
 
 ```
 5 µm membrane
-  Baseline (filter alone):  96-298 mL  (confidence: low - no measured concentration)
+  Baseline (filter alone):  96-298 mL  (confidence: low - MEASURED calibration, no measured concentration)
   + 5mm hydrocyclone:       1.50x      (marginal - worth a replicate trial)
   + 10mm hydrocyclone:      1.23x      (marginal)
 
 10 µm membrane
-  Baseline:                 insufficient data - no trial has used this pore size
+  Baseline (filter alone):  228-398 mL (confidence: low - ESTIMATED, no trial at this pore size)
   + 5mm hydrocyclone:       2.09x      (likely - the best-supported option)
   + 10mm hydrocyclone:      1.52x      (likely)
 
 Verdict: pretreatment looks worthwhile for membrane ratings from 10 to 20 µm.
 ```
 
-Two things worth noticing: the baseline is only ever a real number where a
-real bench trial calibrates that exact pore size (`data/trials.json`) —
-everywhere else it is honestly "insufficient data," not a guess dressed up
-as one. And the uplift is always a multiplier *on top of* the baseline,
-never a self-contained verdict — a 2× uplift on an unknown baseline is
-still "we don't know how much water," which is why both numbers are shown
-together, not collapsed into one.
+Three things worth noticing. The baseline is a real, trial-calibrated
+number only where a real bench trial calibrates that exact pore size
+(`data/trials.json`) — today, only 5 µm. Everywhere else it is a
+**literature-based estimate** (`data/sediment-properties.json`), not a
+measurement and not a blank: a real bench trial cannot realistically exist
+for every pore size at every UK site, so the tool infers from published
+porosity/density data instead of leaving the cell empty — always capped at
+`low` confidence, always clearly marked "ESTIMATED," and always superseded
+outright the moment a real trial exists at that pore size (see
+`lib/baseline.ts`'s `estimateBaselineVolume`). And the uplift is always a
+multiplier *on top of* the baseline, never a self-contained verdict — a 2×
+uplift on an estimated baseline is still "we don't know how much water for
+sure," which is why both numbers are shown together, not collapsed into one.
 
 ## How a prediction gets built: the input hierarchy
 
@@ -86,6 +92,35 @@ labelled `"guessed"`, a field read with an assumed spread is
 `"field-adjusted"`, and only a genuine measurement is `"measured"` — these
 three words travel with every number this tool produces.
 
+## The baseline volume: measured vs. estimated
+
+The table above decides the particle size distribution (PSD) — sand,
+silt, clay, or something field-measured. Turning that PSD into an actual
+**volume** (how many mL before the filter blinds) is a separate step, with
+its own two-tier honesty split, `baselineSource` on every assessment:
+
+| `baselineSource` | What it means | Confidence ceiling |
+|---|---|---|
+| `"measured"` | A real bench trial (or an exact-site trial, rarer and stronger still) calibrates this exact membrane pore size. | Up to `high`, with a measured PSD and a real concentration. |
+| `"estimated"` | No trial calibrates this exact pore size, but at least one real trial exists at *some* pore size — so the volume is INFERRED from it, corrected for this site's own sediment class (sand/silt/clay, by its real PSD d50) using published porosity and particle-density literature (`data/sediment-properties.json`). | Always `low` — this stacks a PSD guess, a literature porosity range, and a cross-pore-size extrapolation, never more certain than any one of those alone. |
+| `"insufficient-data"` | No real trial exists at *any* pore size to anchor even an estimate from (`baselineVolume` is `null`). | — |
+
+This exists because a UK-wide tool cannot wait for a bench trial at every
+pore size at every site — today, every real trial in `data/trials.json`
+used a 5 µm filter, so without this tier every other pore size would show
+a blank "insufficient data" forever. The estimate fills that gap honestly:
+clearly labelled, always low confidence, and the moment a real trial
+calibrates that pore size, it supersedes the estimate outright — "measured
+beats modelled, always" (HANDOFF.md rule 7) applies here exactly as it
+does to an exact-site trial. See `lib/baseline.ts`'s `estimateBaselineVolume`
+and `data/sediment-properties.json`'s own header for the physics and the
+real, checked sources behind the porosity ranges — clay's range is
+deliberately the widest of the three, because published porosity for
+freshly suspended/flocculated clay genuinely runs anywhere from about 0.47
+to 0.9 depending on consolidation state, and this tool does not model floc
+structure well enough to narrow that further (see HANDOFF.md's
+floc-density reservation).
+
 ## Where things live
 
 ```
@@ -94,7 +129,8 @@ data/                        everything editable, no code required
   membranes.json               0.45 / 1.2 / 5 / 10 / 20 µm, + product details
   particle-sizes.json          assumed PSD per solids character    ← all guesses
   screening-parameters.json    uplift category thresholds, the volume↔load maths
-  trials.json                  real bench filtration trials  ← the baseline's only calibration
+  trials.json                  real bench filtration trials  ← the baseline's only MEASURED calibration
+  sediment-properties.json     published porosity/density by grain-size class  ← the baseline's ESTIMATED fallback, cited
   field-observations.json      what someone saw at a site, hand-curated
   validated-studies.json       real published river sediment figures, for sanity-checking
   query-log.json               predicted-vs-observed: real bench trials (written by scripts/build-query-log.ts) + real screened sites (none yet)
@@ -105,7 +141,8 @@ lib/
   character.ts                 catchment + geology → sand | mixed_mineral | silt | clay, tier-descent orchestrator
   geology.ts                   parse BGS geology at a point
   psd.ts                       character → particle size distribution
-  baseline.ts                  real-trial-calibrated absolute filterable volume
+  baseline.ts                  real-trial-calibrated absolute filterable volume, + a literature-estimated fallback
+  sediment-properties.ts       porosity/density correction factor behind that estimated fallback
   retention.ts                 membrane pore size → effective retention
   separation.ts                hydrocyclone grade-efficiency curve
   assessment.ts                baseline + per-method uplift + recommendation, per membrane
@@ -132,7 +169,7 @@ scripts/
   build-query-log.ts           regenerate data/query-log.json's bench-validation entries (npx tsx scripts/build-query-log.ts)
   lib/bng.mjs                  British National Grid ↔ WGS84, both directions
 
-tests/            one file per lib/ module, 338 tests total, no network
+tests/            one file per lib/ module, 362 tests total, no network
 ```
 
 ## Running it
@@ -227,6 +264,15 @@ plain-language log on each card.
    under-predict every real trial's uplift by roughly 3–10×. One real
    measurement would replace a guess with a fact exactly where it currently
    matters most.
+8. ~~**The baseline only covers one pore size (5 µm)**~~ — done. Every pore
+   size now gets a real volume: `"measured"` where a real trial calibrates
+   it, `"estimated"` (always `low` confidence, clearly labelled, published
+   literature cited) everywhere else — because a UK-wide tool cannot wait
+   for a bench trial at every site. See "The baseline volume: measured vs.
+   estimated" above. The estimate's own biggest acknowledged weakness: clay
+   porosity is cited from real literature but genuinely spans 0.47-0.9
+   depending on consolidation, which this tool does not model further - the
+   same unmodelled floc-structure gap as `flocDensityPenalty`.
 
 ## Privacy and disclaimer
 

@@ -48,6 +48,71 @@ this document, take that. It is exactly as true of the rebuilt baseline+
 uplift output as it was of the old `volumeRatio` — the physics never
 changed, only how it's presented and what feeds it.
 
+## The baseline estimate: inferring what a UK-wide tool can't bench-test everywhere
+
+Rebuild phase 10, direct from the user's own framing: "it will be
+impossible to collect trial data for everywhere in the UK... so we need to
+infer to a certain degree." Before this phase, the baseline volume (not
+the uplift - see the fouling physics above, unaffected) was a real number
+*only* at 5 µm, the one pore size every real `data/trials.json` entry
+happens to have used; every other pore size was an honest, permanent blank.
+
+**The insight that makes an estimate defensible without inventing new
+apparatus constants:** `volumeMl = k / sqrt(c * alpha)`. `alpha` (the
+PSD-shape term, mass-weighted 1/d²) is already computed purely from
+geology/field data, no trial needed. The real trial-calibrated `k` silently
+lumps together everything else: filter area, pressure, the Kozeny
+constant, unit conversions, AND the trial feed's own particle porosity and
+density (Carman-Kozeny: true specific resistance is proportional to
+`(1-porosity) / (porosity³ × density)`, not just the shape term). Crucially,
+if you express a NEW site's `k` as a *ratio* against the trial's own `k`,
+every one of those apparatus/unit constants is identical on both sides and
+cancels out exactly - leaving only porosity and particle density, which
+are real, citable, published quantities, unlike the apparatus constants.
+
+`lib/sediment-properties.ts` classifies a PSD by its own d50 against the
+real Udden-Wentworth boundaries (reusing `lib/field-update.ts`'s existing
+clay/silt/sand boundaries, not a new invented threshold) and looks up a
+published porosity/density range per class from `data/sediment-
+properties.json` (sources checked live via WebSearch this session, not
+recalled from training - see that file's own `_README`). `lib/baseline.ts`'s
+`estimateBaselineVolume` then rescales the one real trial-calibrated `k`
+(today: the 5 µm calibration, 10 real trials) by the ratio between the
+trial feed's own measured grain-size class (consistently silt-class, d50
+22-31 µm across all 10 trials - a real finding, not an assumption) and the
+target site's class, giving an estimated volume range at ANY pore size.
+
+**A real, amusing cross-check this surfaced**: the classifier, built purely
+from the real Wentworth boundary independently of this project's own
+character-naming convention, correctly flags that the guessed "sand"
+*character* profile (`data/particle-sizes.json`, d50=60 µm) is actually
+silt-grade by real grain-size boundaries (the 63 µm sand threshold) - which
+is exactly the file's own long-standing "suspended load is finer than bed
+material" warning, now independently confirmed rather than just asserted.
+
+**Honesty rules this tier follows, same as everywhere else in this
+project:** `baselineSource` is `"measured" | "estimated" | "insufficient-
+data"`, never silently conflated. An estimate is ALWAYS capped at `low`
+confidence (it stacks a PSD guess, a literature porosity range, and a
+cross-pore-size apparatus-constant extrapolation). Every estimated figure
+is prefixed "ESTIMATED" in the report and highlighted differently in the
+UI (`cell-marginal`, not `cell-strong`). A real trial - general calibration
+or exact-site - supersedes the estimate outright, never averaged with it
+(HANDOFF rule 7). Clay's porosity range is deliberately the widest of the
+three classes (0.47-0.9), because real literature says freshly
+suspended/flocculated clay genuinely varies that much depending on
+consolidation state - the same unmodelled floc-structure gap
+`flocDensityPenalty` already names, carried through honestly here rather
+than hidden behind a falsely-precise single number.
+
+Known limitation, stated plainly: Kozeny-Carman's own theoretical
+prediction is documented in the filtration literature to deviate from real
+MEASURED specific cake resistance, especially for fine/compressible cakes
+(see `data/sediment-properties.json`'s cited sources) - this estimate
+inherits that same real limitation. It is a genuine order-of-magnitude
+inference, not a disguised measurement, and says so in its own reasoning
+text every time it fires.
+
 ## Where the project stands
 
 The output model and the input pipeline were both rebuilt this project
@@ -62,7 +127,7 @@ hierarchy of sources that stops at the first tier with usable data. See
 each tier's live/untested/dropped status — it is not repeated here to avoid
 the two files drifting apart again.
 
-`npm test` — 338 tests, no network, no API keys.
+`npm test` — 362 tests, no network, no API keys.
 `npx tsc --noEmit` / `npx next build` — both clean.
 `node --env-file=.env.local scripts/probe-new-sources.mjs` — needs internet,
 optional API keys for the tide and satellite tiers.
@@ -137,8 +202,11 @@ optional API keys for the tide and satellite tiers.
    │                        wherever one exists)
    │
    ├─ lib/baseline.ts       real-trial-calibrated absolute filterable volume
-   │                        per membrane pore size - "insufficient data"
-   │                        where no trial calibrates that pore size
+   │                        per membrane pore size - falls back to a
+   │                        literature-estimated volume (lib/sediment-
+   │                        properties.ts) where no trial calibrates that
+   │                        exact pore size, "insufficient data" only when
+   │                        no trial exists at ANY pore size to anchor from
    ├─ lib/trials.ts         an EXACT-site trial (same siteId+waterbodyId)
    │                        overrides the calibrated baseline/uplift outright
    │                        - wired into lib/assessment.ts, fires on zero
@@ -384,3 +452,11 @@ not assumed fixed because a phase touched the area.
 3. **A real site-run entry in the validation loop.** The bench-validation
    half (`scripts/build-query-log.ts`) is built and run; the site-run half
    needs #2 above to exist first.
+4. **A real trial at a SECOND pore size.** Every real trial today used
+   5 µm, so `lib/baseline.ts`'s literature-estimated tier
+   (rebuild phase 10) has never been checked against a real measurement -
+   only its sibling, the general 5 µm calibration, has (via the validation
+   loop). One real trial at any OTHER pore size would, for the first time,
+   let `scripts/build-query-log.ts` actually check whether the Carman-
+   Kozeny porosity correction is in the right ballpark, not just internally
+   consistent.

@@ -93,4 +93,31 @@ describe("buildReport", () => {
     expect(report.usefulWindow).toBeNull();
     expect(report.recommendedTest).toMatch(/measured particle size distribution/);
   });
+
+  it("WHAT WE KNOW marks an estimated baseline as ESTIMATED, not a plain figure indistinguishable from a real one", () => {
+    const psd = psdForCharacter("sand");
+    const assessments = assessSite(psd, membranes, cyclones, trials);
+    const report = buildReport(psd, assessments, membranes);
+    const twentyLine = report.whatWeKnow.find((l) => l.startsWith("20 µm"));
+    expect(twentyLine).toMatch(/^20 µm: ESTIMATED baseline filterable volume/);
+    const fiveLine = report.whatWeKnow.find((l) => l.startsWith("5 µm"));
+    expect(fiveLine).not.toMatch(/ESTIMATED/);
+  });
+
+  it("WHAT WE DON'T KNOW flags that some baselines are literature estimates, not measurements", () => {
+    const psd = psdForCharacter("sand");
+    const assessments = assessSite(psd, membranes, cyclones, trials);
+    const report = buildReport(psd, assessments, membranes);
+    const text = report.whatWeDontKnow.join(" ");
+    expect(text).toMatch(/literature-based ESTIMATES/);
+    expect(text).toMatch(/not measurements/);
+  });
+
+  it("WHAT WE DON'T KNOW says every baseline is estimated when there is no real trial at all", () => {
+    const psd = psdForCharacter("sand");
+    const assessments = assessSite(psd, membranes, cyclones, []);
+    const report = buildReport(psd, assessments, membranes);
+    const text = report.whatWeDontKnow.join(" ");
+    expect(text).toMatch(/no real trial exists at any pore size to estimate one from either/);
+  });
 });

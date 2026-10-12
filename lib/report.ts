@@ -87,8 +87,9 @@ function buildWhatWeKnow(psd: Psd, assessments: MembraneAssessment[], membraneBy
     const m = membraneById.get(a.membraneId);
     const label = m?.label ?? a.membraneId;
     if (a.baselineVolume) {
+      const prefix = a.baselineSource === "estimated" ? "ESTIMATED " : "";
       lines.push(
-        `${label}: baseline filterable volume ${a.baselineVolume.lowMl.toFixed(0)}-${a.baselineVolume.highMl.toFixed(0)} mL (mid ${a.baselineVolume.midMl.toFixed(0)} mL), confidence ${a.baselineConfidence}.`,
+        `${label}: ${prefix}baseline filterable volume ${a.baselineVolume.lowMl.toFixed(0)}-${a.baselineVolume.highMl.toFixed(0)} mL (mid ${a.baselineVolume.midMl.toFixed(0)} mL), confidence ${a.baselineConfidence}.`,
       );
     }
   }
@@ -102,9 +103,17 @@ function buildWhatWeDontKnow(psd: Psd, assessments: MembraneAssessment[]): strin
   } else if (psd.status === "field-adjusted") {
     lines.push("The particle size distribution is a field read (grain card/settle test, see lib/field-update.ts) with an assumed spread, not a full lab measurement.");
   }
-  if (assessments.every((a) => !a.baselineVolume)) {
-    lines.push("No membrane pore size tested has a real bench-trial calibration for an absolute baseline volume.");
+  const anyMeasuredBaseline = assessments.some((a) => a.baselineSource === "measured");
+  const anyEstimatedBaseline = assessments.some((a) => a.baselineSource === "estimated");
+
+  if (!anyMeasuredBaseline && !anyEstimatedBaseline) {
+    lines.push("No membrane pore size tested has a real bench-trial calibration for an absolute baseline volume, and no real trial exists at any pore size to estimate one from either.");
   } else {
+    if (!anyMeasuredBaseline) {
+      lines.push("No membrane pore size tested has a real bench-trial calibration for an absolute baseline volume - every baseline volume shown is a literature-based ESTIMATE (data/sediment-properties.json), not a measurement. Treat it as order-of-magnitude.");
+    } else if (anyEstimatedBaseline) {
+      lines.push("Some membrane pore sizes have no real bench-trial calibration - their baseline volumes are literature-based ESTIMATES (data/sediment-properties.json), always low confidence, not measurements.");
+    }
     // Real text authored in assessment.ts's assessMembrane - a direct
     // check rather than plumbing a separate boolean through just for this
     // one line, since every baseline-having assessment already says this

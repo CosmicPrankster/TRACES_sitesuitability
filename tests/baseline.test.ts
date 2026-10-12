@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { loadMembranes, loadTrials } from "@/lib/data";
 import {
   calibrateBaselines,
+  estimateBaselineVolume,
   foulingLoadForMembrane,
   predictBaselineVolume,
   psdFromMeasuredD20D50D90,
@@ -115,5 +116,73 @@ describe("predictBaselineVolume", () => {
     const lowC = predictBaselineVolume(cal5, foulingLoad, 500);
     const highC = predictBaselineVolume(cal5, foulingLoad, 5000);
     expect(highC!.midMl).toBeLessThan(lowC!.midMl);
+  });
+});
+
+describe("estimateBaselineVolume: the literature-based estimate for an uncalibrated pore size (rebuild phase 10)", () => {
+  const cal = calibrateBaselines(trials, byPoreSize);
+  const cal5 = cal.find((c) => c.poreSizeUm === 5)!;
+  const twentyUm = byPoreSize.get(20)!;
+
+  it("gives a real, non-null range at 20um - a pore size no real trial has ever calibrated", () => {
+    const psd = psdForCharacter("sand");
+    const { foulingLoad } = foulingLoadForMembrane(psd, twentyUm);
+    const estimate = estimateBaselineVolume(cal5, foulingLoad, psd.d50Um);
+    expect(estimate).not.toBeNull();
+    expect(estimate!.volume.lowMl).toBeLessThan(estimate!.volume.midMl);
+    expect(estimate!.volume.midMl).toBeLessThan(estimate!.volume.highMl);
+    expect(estimate!.anchorPoreSizeUm).toBe(5);
+    expect(estimate!.anchorTrialCount).toBe(10);
+  });
+
+  it("classifies the guessed 'sand' CHARACTER's suspended-load PSD (d50=60um) as silt-class, not sand", () => {
+    // Not a bug: data/particle-sizes.json's own "sand" profile is deliberately
+    // the SUSPENDED load for a sand-dominated catchment, which this project
+    // repeatedly warns is much finer than the bed material the character is
+    // named after (d50=60um sits just under the real 63um Wentworth sand
+    // boundary) - this classifier, built from the real boundary independently,
+    // correctly catches that rather than trusting the character label's name.
+    const psd = psdForCharacter("sand");
+    const { foulingLoad } = foulingLoadForMembrane(psd, twentyUm);
+    const estimate = estimateBaselineVolume(cal5, foulingLoad, psd.d50Um)!;
+    expect(estimate.sedimentClass).toBe("silt");
+  });
+
+  it("classifies a clay-character PSD's sediment class as clay", () => {
+    const psd = psdForCharacter("clay");
+    const { foulingLoad } = foulingLoadForMembrane(psd, byPoreSize.get(0.45)!);
+    const estimate = estimateBaselineVolume(cal5, foulingLoad, psd.d50Um)!;
+    expect(estimate.sedimentClass).toBe("clay");
+  });
+
+  it("returns null for a non-positive alpha or d50 - insufficient data, not a guessed number", () => {
+    expect(estimateBaselineVolume(cal5, 0, 10)).toBeNull();
+    expect(estimateBaselineVolume(cal5, 0.01, 0)).toBeNull();
+  });
+
+  it("falls back to the anchor calibration's own reference concentration when the site's is unknown", () => {
+    const psd = psdForCharacter("sand");
+    const { foulingLoad } = foulingLoadForMembrane(psd, twentyUm);
+    const withDefault = estimateBaselineVolume(cal5, foulingLoad, psd.d50Um);
+    const withExplicit = estimateBaselineVolume(cal5, foulingLoad, psd.d50Um, cal5.referenceConcentrationMgL);
+    expect(withDefault).toEqual(withExplicit);
+  });
+
+  it("a real measured site concentration changes the estimate, same as the measured baseline path", () => {
+    const psd = psdForCharacter("sand");
+    const { foulingLoad } = foulingLoadForMembrane(psd, twentyUm);
+    const lowC = estimateBaselineVolume(cal5, foulingLoad, psd.d50Um, 500)!;
+    const highC = estimateBaselineVolume(cal5, foulingLoad, psd.d50Um, 5000)!;
+    expect(highC.volume.midMl).toBeLessThan(lowC.volume.midMl);
+  });
+
+  it("widens appropriately for clay vs sand, reflecting clay's real published porosity uncertainty", () => {
+    const sandPsd = psdForCharacter("sand");
+    const clayPsd = psdForCharacter("clay");
+    const sandEstimate = estimateBaselineVolume(cal5, foulingLoadForMembrane(sandPsd, twentyUm).foulingLoad, sandPsd.d50Um)!;
+    const clayEstimate = estimateBaselineVolume(cal5, foulingLoadForMembrane(clayPsd, byPoreSize.get(0.45)!).foulingLoad, clayPsd.d50Um)!;
+    const sandSpread = sandEstimate.volume.highMl / sandEstimate.volume.lowMl;
+    const claySpread = clayEstimate.volume.highMl / clayEstimate.volume.lowMl;
+    expect(claySpread).toBeGreaterThan(sandSpread);
   });
 });

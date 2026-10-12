@@ -6,6 +6,7 @@ import { gradeEfficiency, gradeEfficiencyCurve } from "./separation";
 import { membraneRetention } from "./retention";
 import {
   calibrateBaselines,
+  estimateBaselineVolume,
   foulingLoadForMembrane,
   predictBaselineVolume,
   type BaselineCalibration,
@@ -77,10 +78,23 @@ export type MethodRecommendation =
   | { kind: "pretreatment"; methodId: string; methodLabel: string; reasoning: string }
   | { kind: "sample-sediment"; reasoning: string };
 
+/**
+ * "measured" - a real trial (general calibration or exact-site) anchors
+ * this baseline. "estimated" - no real trial exists at this pore size, so
+ * it is INFERRED from a real calibration at a different pore size,
+ * corrected for this site's sediment class via published literature (see
+ * lib/baseline.ts's estimateBaselineVolume) - never higher than `low`
+ * confidence, and always superseded the moment a real trial exists.
+ * "insufficient-data" - no real trial exists at ANY pore size to anchor
+ * even an estimate from.
+ */
+export type BaselineSource = "measured" | "estimated" | "insufficient-data";
+
 export interface MembraneAssessment {
   membraneId: string;
   /** null = insufficient data for an absolute number, not a guess at one. */
   baselineVolume: VolumeRange | null;
+  baselineSource: BaselineSource;
   baselineConfidence: Confidence;
   baselineReasoning: string;
   uplifts: UpliftResult[];
@@ -225,7 +239,7 @@ function confidenceCaveat(psd: Psd, hydrocyclone: Hydrocyclone, membraneSource: 
 }
 
 function recommend(
-  baselineVolume: VolumeRange | null,
+  baselineSource: BaselineSource,
   uplifts: UpliftResult[],
   membrane: Membrane,
 ): MethodRecommendation {
@@ -237,10 +251,16 @@ function recommend(
     return u.multiplier.mid > acc.multiplier.mid ? u : acc;
   }, null);
 
-  if (!baselineVolume && (!best || best.category !== "likely")) {
+  // "measured" is the only baseline tier that counts as a real calibrated
+  // number here - "estimated" (lib/baseline.ts's literature-based guess)
+  // is deliberately treated the same as having none at all for THIS
+  // decision: a wide, low-confidence estimate should not stop the honest
+  // recommendation from being "go measure something" when the uplift
+  // doesn't clearly help either.
+  if (baselineSource !== "measured" && (!best || best.category !== "likely")) {
     return {
       kind: "sample-sediment",
-      reasoning: `There is no calibrated baseline volume for the ${membrane.label} membrane and no pretreatment method clearly helps enough to recommend on its own - the honest next step is a raw-water sediment sample, not a guess at either number.`,
+      reasoning: `There is no real calibrated baseline volume for the ${membrane.label} membrane${baselineSource === "estimated" ? " - only a literature-based estimate" : ""} and no pretreatment method clearly helps enough to recommend on its own - the honest next step is a raw-water sediment sample, not a guess at either number.`,
     };
   }
 
@@ -301,18 +321,41 @@ export function assessMembrane(
         ? "medium"
         : "low";
 
+  let baselineSource: BaselineSource = baselineVolume ? "measured" : "insufficient-data";
+
   let baselineReasoning = baselineVolume
     ? siteConcentration
       ? `Calibrated against ${calibration!.anchorTrialCount} real bench trials at this membrane's pore size, scaled to this feed's predicted fouling load, using a real measured solids concentration near this site (${siteConcentration.mgL.toFixed(0)} mg/L, ${siteConcentration.source}) rather than the calibration trials' own reference concentration.`
       : `Calibrated against ${calibration!.anchorTrialCount} real bench trials at this membrane's pore size, scaled to this feed's predicted fouling load. Assumes a reference solids concentration (${calibration!.referenceConcentrationMgL.toFixed(0)} mg/L, the calibration trials' own mean) because no measured concentration exists for this site yet - that is the main reason this stays low confidence even with a real calibration behind it.`
     : `No recorded trial used a ${membrane.poreSizeUm} µm filter, so there is no real calibration anchor for an absolute volume at this pore size - insufficient data, not a guessed number. The relative uplift below does not depend on this.`;
 
+  // ESTIMATED, not measured: no real trial calibrates this exact pore
+  // size, but at least one real trial exists at SOME pore size to anchor
+  // an estimate from. Per the user's own framing - a UK-wide tool cannot
+  // wait for a bench trial everywhere, so it infers from published
+  // literature rather than leaving every uncalibrated pore size blank.
+  // Always capped at "low" confidence: this stacks a guessed/field PSD,
+  // a literature porosity range, AND a cross-pore-size apparatus-constant
+  // assumption, never more certain than any one of those alone. A real
+  // trial at this pore size - or an exact-site trial below - supersedes
+  // this outright the moment one exists.
+  if (!baselineVolume && calibrations.length > 0) {
+    const anchor = calibrations.reduce((best, c) => (c.anchorTrialCount > best.anchorTrialCount ? c : best));
+    const estimate = estimateBaselineVolume(anchor, foulingLoad, psd.d50Um, siteConcentration?.mgL);
+    if (estimate) {
+      baselineVolume = estimate.volume;
+      baselineSource = "estimated";
+      baselineConfidence = "low";
+      baselineReasoning = `No recorded trial used a ${membrane.poreSizeUm} µm filter, so there is no real calibration anchor at this exact pore size. ESTIMATED instead from the ${estimate.anchorPoreSizeUm} µm calibration (${estimate.anchorTrialCount} real bench trials), corrected for this site's inferred ${estimate.sedimentClass}-class sediment (by its own PSD d50, via published Udden-Wentworth boundaries) using real porosity/particle-density literature - see data/sediment-properties.json for the sources and why the range is wide, especially for clay. This is a literature-informed ESTIMATE, not a measurement: read it as order-of-magnitude, and expect a real trial at this pore size to supersede it outright.`;
+    }
+  }
+
   // Measured beats modelled, always (HANDOFF.md rule 7): a trial run at
   // THIS EXACT site and waterbody is direct evidence, not an estimate, and
-  // supersedes the general bench-trial calibration above outright - no
-  // averaging the two. This never fires today (every real trials.json
-  // entry has siteId/waterbodyId null), but it is ready for the first one
-  // that does.
+  // supersedes both the general bench-trial calibration AND the literature
+  // estimate above outright - no averaging. This never fires today (every
+  // real trials.json entry has siteId/waterbodyId null), but it is ready
+  // for the first one that does.
   if (exactSite) {
     const exactBaselineTrial = findSiteBaselineTrial(
       exactSite.trials,
@@ -323,6 +366,7 @@ export function assessMembrane(
     if (exactBaselineTrial) {
       const v = exactBaselineTrial.volumeBeforeMl!;
       baselineVolume = { lowMl: v, midMl: v, highMl: v };
+      baselineSource = "measured";
       baselineConfidence = "high";
       baselineReasoning = `Measured directly at this exact site and waterbody (trial "${exactBaselineTrial.id}") with a ${membrane.poreSizeUm} µm filter: ${v.toFixed(0)} mL with no pretreatment. This is a real reading, not a modelled estimate, and supersedes the general bench-trial calibration above.`;
     }
@@ -343,9 +387,9 @@ export function assessMembrane(
       reasoning: `Measured directly at this exact site and waterbody (trial "${exactUpliftTrial!.id}"): ${exactUpliftTrial!.volumeBeforeMl} mL before, ${exactUpliftTrial!.volumeAfterMl} mL after the ${h.name} - a real ${ratio.toFixed(2)}x, not a figure modelled from particle size. This supersedes the grade-efficiency estimate above.`,
     };
   });
-  const recommendation = recommend(baselineVolume, uplifts, membrane);
+  const recommendation = recommend(baselineSource, uplifts, membrane);
 
-  return { membraneId: membrane.id, baselineVolume, baselineConfidence, baselineReasoning, uplifts, recommendation };
+  return { membraneId: membrane.id, baselineVolume, baselineSource, baselineConfidence, baselineReasoning, uplifts, recommendation };
 }
 
 /**
