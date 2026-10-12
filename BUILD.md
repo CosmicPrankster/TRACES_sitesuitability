@@ -327,6 +327,53 @@ elsewhere. This needs one more live probe round (an API key + a run of the
 updated probe script) before any real code gets written - not marked done
 until that happens.
 
+### Rebuild phase 7: on-site field-update path (`lib/field-update.ts`)
+
+Three real field tests a technician can do in a few minutes, no lab
+equipment: a **grain card** match (the real Udden-Wentworth/ISO 14688 size
+scale, not invented classes), a **settle test** (how fast a jar of raw
+water clears), and a **turbidity tube** reading. A result here is a real,
+field-measured PSD for this session - it replaces `psdForCharacter`'s
+guess the same way a trial's measured feed PSD already does, and is never
+written back to `data/particle-sizes.json` or `data/field-observations.json`
+automatically (that stays a deliberate, human-reviewed edit, not a side
+effect of a web request).
+
+**Psd gained a third status**, `"field-adjusted"`, sitting between
+`"guessed"` and `"measured"` - the same three-tier vocabulary
+`data.ts`'s `ValueStatus` already uses for hydrocyclone/membrane
+provenance, extended to particle size for the first time. A grain-card
+class alone gives a real d50 but an assumed spread, so it lands as
+`"field-adjusted"`; when a settle test independently agrees with it
+(same discipline as `character.ts`'s geology corroboration - two real
+observations pointing the same way), it's promoted to `"measured"`. A
+disagreement is reported plainly and the grain-card read (the more
+direct size evidence) is kept, never averaged with the settle test.
+Updated `psdLevel`/`confidenceCaveat` (`assessment.ts`) and the "what we
+don't know" text (`report.ts`) for the new middle tier - and fixed a
+real staleness bug found in the process: `report.ts` still unconditionally
+claimed "no water-quality source is wired in for this site yet", which
+stopped being true in phase 3.
+
+The turbidity tube reading is recorded as context only, never converted to
+a number this tool scores on - tube devices and their depth-to-NTU
+calibration vary too much between models, the same reasoning that kept
+turbidity and suspended-solids concentration apart in phase 3's water-
+quality module. A grain-card read of "gravel" is flagged as a likely
+bed-material sample, not suspended load - `data/particle-sizes.json`'s own
+long-standing warning about this exact trap, now enforced in code instead
+of only in a comment.
+
+New stateless `POST /api/field-update` (same pattern as `/api/resolve`
+and `/api/screen`) and a real form in `ReportView.tsx` - verified against
+the actual running app with Playwright, not just unit tests: submitting a
+coarse-sand grain card with a 4-minute settle test correctly promoted the
+PSD to "measured", recomputed the full membrane matrix, and rendered the
+field reasoning and site note in the UI.
+
+16 new tests (`tests/field-update.test.ts`). 277/277 tests pass,
+`tsc --noEmit` and `next build` both clean.
+
 ### Two findings that mattered more than the pass/fail list
 
 **The v1 probe reported empty responses as "ok".** That hid the BGS failure

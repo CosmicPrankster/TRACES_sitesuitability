@@ -97,13 +97,22 @@ function buildWhatWeKnow(psd: Psd, assessments: MembraneAssessment[], membraneBy
 
 function buildWhatWeDontKnow(psd: Psd, assessments: MembraneAssessment[]): string[] {
   const lines: string[] = [];
-  if (psd.status !== "measured") {
+  if (psd.status === "guessed") {
     lines.push("The particle size distribution is a guess from solids character, not a site measurement.");
+  } else if (psd.status === "field-adjusted") {
+    lines.push("The particle size distribution is a field read (grain card/settle test, see lib/field-update.ts) with an assumed spread, not a full lab measurement.");
   }
   if (assessments.every((a) => !a.baselineVolume)) {
     lines.push("No membrane pore size tested has a real bench-trial calibration for an absolute baseline volume.");
-  } else if (assessments.some((a) => a.baselineVolume)) {
-    lines.push("Every baseline volume assumes a reference solids concentration, not a measured one - no water-quality source is wired in for this site yet.");
+  } else {
+    // Real text authored in assessment.ts's assessMembrane - a direct
+    // check rather than plumbing a separate boolean through just for this
+    // one line, since every baseline-having assessment already says this
+    // in its own reasoning verbatim.
+    const anyRealConcentration = assessments.some((a) => a.baselineReasoning.includes("real measured solids concentration"));
+    if (!anyRealConcentration) {
+      lines.push("Every baseline volume assumes a reference solids concentration, not a measured one - no real EA Water Quality Archive reading was found near this site.");
+    }
   }
   lines.push("Floc density effects on cohesive clay are not modelled (see screening-parameters.json).");
   lines.push("No filtration trial exists for this specific site - see data/trials.json.");

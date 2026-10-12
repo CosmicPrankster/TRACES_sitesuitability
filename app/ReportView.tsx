@@ -113,6 +113,31 @@ interface SelectedDetail {
   methodId?: string;
 }
 
+const GRAIN_CARD_OPTIONS: { value: string; label: string }[] = [
+  { value: "", label: "Not observed" },
+  { value: "clay", label: "Clay (under 4 µm)" },
+  { value: "silt", label: "Silt (4-63 µm)" },
+  { value: "fine_sand", label: "Fine sand (63-200 µm)" },
+  { value: "medium_sand", label: "Medium sand (200-630 µm)" },
+  { value: "coarse_sand", label: "Coarse sand (630 µm-2 mm)" },
+  { value: "gravel", label: "Gravel (over 2 mm)" },
+];
+
+interface FieldUpdateResult {
+  psd: Psd;
+  fieldReasoning: string[];
+  additionalContext: string[];
+  assessments: MembraneAssessment[];
+  report: ScreeningReport;
+}
+
+type FieldUpdateState =
+  | { phase: "idle" }
+  | { phase: "submitting" }
+  | { phase: "done"; result: FieldUpdateResult }
+  | { phase: "no-evidence"; message: string }
+  | { phase: "failed"; message: string };
+
 export default function ReportView({ hydrocyclones, membranes, byCharacter }: Props) {
   const [query, setQuery] = useState("");
   const [flow, setFlow] = useState<FlowState>({ phase: "idle" });
@@ -120,8 +145,60 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<SelectedDetail | null>(null);
 
+  const [fieldUpdate, setFieldUpdate] = useState<FieldUpdateState>({ phase: "idle" });
+  const [grainCardClass, setGrainCardClass] = useState("");
+  const [settleCleared, setSettleCleared] = useState("");
+  const [settleHazyHours, setSettleHazyHours] = useState("");
+  const [turbidityTube, setTurbidityTube] = useState("");
+  const [siteNote, setSiteNote] = useState("");
+
   const live = flow.phase === "screened" ? flow : null;
-  const { assessments, report } = live ?? byCharacter[character];
+  const fieldResult = fieldUpdate.phase === "done" ? fieldUpdate.result : null;
+  const { assessments, report } = fieldResult ?? live ?? byCharacter[character];
+
+  async function submitFieldUpdate() {
+    setFieldUpdate({ phase: "submitting" });
+    try {
+      const body: Record<string, unknown> = {};
+      if (grainCardClass) body.grainCardClass = grainCardClass;
+      if (settleCleared.trim() || settleHazyHours.trim()) {
+        body.settleTest = {
+          clearedWithinMinutes: settleCleared.trim() ? Number(settleCleared) : null,
+          observedForHours: settleHazyHours.trim() ? Number(settleHazyHours) : null,
+        };
+      }
+      if (turbidityTube.trim()) body.turbidityTubeReadingCm = Number(turbidityTube);
+      if (siteNote.trim()) body.siteNote = siteNote.trim();
+
+      const res = await fetch("/api/field-update", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const data = await res.json();
+      if (!data.ok) {
+        setFieldUpdate({ phase: "no-evidence", message: data.message });
+        return;
+      }
+      setFieldUpdate({
+        phase: "done",
+        result: {
+          psd: data.psd,
+          fieldReasoning: data.fieldReasoning,
+          additionalContext: data.additionalContext,
+          assessments: data.assessments,
+          report: data.report,
+        },
+      });
+      setSelected(null);
+    } catch {
+      setFieldUpdate({ phase: "failed", message: "Request failed - the server did not respond." });
+    }
+  }
+
+  function clearFieldUpdate() {
+    setFieldUpdate({ phase: "idle" });
+  }
 
   const assessmentFor = (membraneId: string) => assessments.find((a) => a.membraneId === membraneId)!;
   const selectedAssessment = selected ? assessmentFor(selected.membraneId) : null;
@@ -386,6 +463,99 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
             </option>
           ))}
         </select>
+      </section>
+
+      <section className="input-row field-update-row">
+        <label>
+          <strong>On-site field update</strong> - standing at the site right now? A real field
+          reading replaces the desk-based guess for this report, deterministically, no site visit
+          needed to rebuild anything.
+        </label>
+        <div className="field-update-form">
+          <label htmlFor="grain-card">
+            Grain card match
+            <select id="grain-card" value={grainCardClass} onChange={(e) => setGrainCardClass(e.target.value)}>
+              {GRAIN_CARD_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label htmlFor="settle-cleared">
+            Settle test - cleared within (minutes)
+            <input
+              id="settle-cleared"
+              type="number"
+              min="0"
+              value={settleCleared}
+              onChange={(e) => setSettleCleared(e.target.value)}
+              placeholder="e.g. 5"
+            />
+          </label>
+          <label htmlFor="settle-hazy">
+            ...or still hazy after (hours)
+            <input
+              id="settle-hazy"
+              type="number"
+              min="0"
+              value={settleHazyHours}
+              onChange={(e) => setSettleHazyHours(e.target.value)}
+              placeholder="e.g. 6"
+            />
+          </label>
+          <label htmlFor="turbidity-tube">
+            Turbidity tube reading (cm)
+            <input
+              id="turbidity-tube"
+              type="number"
+              min="0"
+              value={turbidityTube}
+              onChange={(e) => setTurbidityTube(e.target.value)}
+              placeholder="context only - not scored"
+            />
+          </label>
+          <label htmlFor="site-note">
+            Site note
+            <input id="site-note" type="text" value={siteNote} onChange={(e) => setSiteNote(e.target.value)} placeholder="anything else worth recording" />
+          </label>
+          <div className="field-update-actions">
+            <button type="button" onClick={submitFieldUpdate} disabled={!grainCardClass || fieldUpdate.phase === "submitting"}>
+              {fieldUpdate.phase === "submitting" ? "Recomputing..." : "Apply field reading"}
+            </button>
+            {fieldResult && (
+              <button type="button" onClick={clearFieldUpdate}>
+                Clear field reading, use the desk estimate again
+              </button>
+            )}
+          </div>
+        </div>
+        {fieldUpdate.phase === "no-evidence" && <p className="hint">{fieldUpdate.message}</p>}
+        {fieldUpdate.phase === "failed" && <p className="hint">{fieldUpdate.message}</p>}
+        {fieldResult && (
+          <div className="live-status live-ok">
+            <p>
+              <strong>Field reading applied:</strong> {fieldResult.psd.label} (status: {fieldResult.psd.status})
+            </p>
+            <ul>
+              {fieldResult.fieldReasoning.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+            {fieldResult.additionalContext.length > 0 && (
+              <>
+                <p className="hint">Additional context (not scored):</p>
+                <ul>
+                  {fieldResult.additionalContext.map((line, i) => (
+                    <li key={i} className="hint">
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
       </section>
 
       <section className={`window-banner ${report.usefulWindow ? "window-yes" : "window-no"}`}>

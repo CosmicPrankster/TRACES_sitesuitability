@@ -102,8 +102,8 @@ function cutLevel(status: ValueStatus): 0 | 1 | 2 {
   return status === "measured" ? 2 : status === "field-adjusted" ? 1 : 0;
 }
 
-function psdLevel(status: Psd["status"]): 0 | 2 {
-  return status === "measured" ? 2 : 0;
+function psdLevel(status: Psd["status"]): 0 | 1 | 2 {
+  return status === "measured" ? 2 : status === "field-adjusted" ? 1 : 0;
 }
 
 function membraneLevel(source: "measured-product" | "nominal-pore-size"): 0 | 2 {
@@ -208,7 +208,8 @@ export function assessUplift(psd: Psd, membrane: Membrane, hydrocyclone: Hydrocy
 
 function confidenceCaveat(psd: Psd, hydrocyclone: Hydrocyclone, membraneSource: "measured-product" | "nominal-pore-size"): string {
   const weakLinks: string[] = [];
-  if (psd.status !== "measured") weakLinks.push("the site's particle size distribution is a guess");
+  if (psd.status === "guessed") weakLinks.push("the site's particle size distribution is a guess");
+  else if (psd.status === "field-adjusted") weakLinks.push("the site's particle size distribution is a field read with an assumed spread, not a full lab measurement");
   if (hydrocyclone.status.cut !== "measured") weakLinks.push(`the ${hydrocyclone.name}'s cut sizes are ${hydrocyclone.status.cut}`);
   if (membraneSource !== "measured-product") weakLinks.push("the membrane's retention size is the nominal pore size, not a supplier figure");
   return weakLinks.length === 0
@@ -277,16 +278,18 @@ export function assessMembrane(
 
   // Never an average of the two factors - the weaker one caps it, same
   // discipline as overallConfidence above. A real measured concentration
-  // is worth a step up even with a guessed PSD (medium, not low); both
-  // real together is the one case allowed to reach high - see the
-  // predictBaselineVolume caller contract in lib/baseline.ts.
-  const psdIsMeasured = psd.status === "measured";
+  // is worth a step up even with a guessed PSD (medium, not low); a field-
+  // adjusted PSD (lib/field-update.ts) is worth the same step up on its
+  // own. Both a fully MEASURED PSD and a real concentration together is
+  // the one case allowed to reach high - see the predictBaselineVolume
+  // caller contract in lib/baseline.ts.
+  const psdTier = psdLevel(psd.status); // 0 guessed, 1 field-adjusted, 2 measured
   const concentrationIsReal = Boolean(siteConcentration);
   const baselineConfidence: Confidence = !baselineVolume
     ? "low"
-    : psdIsMeasured && concentrationIsReal
+    : psdTier === 2 && concentrationIsReal
       ? "high"
-      : psdIsMeasured || concentrationIsReal
+      : psdTier >= 1 || concentrationIsReal
         ? "medium"
         : "low";
 

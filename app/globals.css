@@ -182,6 +182,63 @@ main {
   color: var(--text);
 }
 
+.field-update-row {
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.field-update-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.6rem;
+  width: 100%;
+}
+
+.field-update-form label {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.field-update-form input,
+.field-update-form select {
+  font-size: 0.9rem;
+  padding: 0.35rem 0.5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.field-update-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+.field-update-actions button {
+  font-size: 0.9rem;
+  padding: 0.4rem 0.9rem;
+  border-radius: 6px;
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: #fff;
+  cursor: pointer;
+}
+
+.field-update-actions button:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.field-update-actions button:nth-child(2) {
+  background: var(--surface);
+  color: var(--accent);
+}
+
 .window-banner {
   border-radius: 8px;
   padding: 0.9rem 1rem;

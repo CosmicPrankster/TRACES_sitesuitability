@@ -22,8 +22,14 @@ export interface Psd {
   d10Um: number;
   d50Um: number;
   d90Um: number;
-  /** Where these numbers came from. "guessed" until a site measurement exists. */
-  status: "guessed" | "measured";
+  /**
+   * Where these numbers came from. "guessed" until a site measurement
+   * exists; "field-adjusted" for a real on-site read whose spread is still
+   * assumed rather than measured (lib/field-update.ts's grain-card-alone
+   * read) - the same three-tier vocabulary data.ts's ValueStatus already
+   * uses for hydrocyclone/membrane provenance.
+   */
+  status: "guessed" | "field-adjusted" | "measured";
   /** What this distribution is, in words, for the report. */
   label: string;
   note?: string;
