@@ -21,6 +21,7 @@ import {
 import { isCrystallineBedrock, parseBgsFeatureInfo, readLithology, summariseGeology } from "./geology";
 import { screenRiverWaterQuality } from "./sources/water-quality";
 import type { SiteConcentration } from "./baseline";
+import { assessSiteFlags, type SiteFlags } from "./flags";
 
 /**
  * BLOCK 6, site input - the live version of scripts/probe.mjs's data path,
@@ -142,6 +143,8 @@ async function fetchGeologyCorroboration(easting: number, northing: number): Pro
     statement: geologySummary.statement,
     bedrockIsCrystalline: isCrystallineBedrock(bedrock?.lithology ?? null),
     coarseSuperficial: (superficialSignal?.coarseness ?? 0) > 0.3,
+    bedrockLithology: bedrock?.lithology ?? null,
+    superficialLithology: superficial?.lithology ?? null,
   };
 }
 
@@ -293,6 +296,8 @@ export interface StationScreenSuccess {
    * reading), not a failure. See fetchSiteConcentration.
    */
   siteConcentration?: SiteConcentration;
+  /** Algae/inhibition risk flags (lib/flags.ts, rebuild phase 4) - independent of characterInference, never blended into it. */
+  flags: SiteFlags;
   characterInference: CharacterInference;
 }
 
@@ -331,6 +336,11 @@ export async function screenStation(station: NrfaStation): Promise<StationScreen
     };
   }
 
+  const flags = assessSiteFlags(
+    { cropland: catchment.cropland, builtUp: catchment.builtUp },
+    { bedrock: corroboration?.bedrockLithology ?? null, superficial: corroboration?.superficialLithology ?? null },
+  );
+
   return {
     ok: true,
     station,
@@ -338,6 +348,7 @@ export async function screenStation(station: NrfaStation): Promise<StationScreen
     geologyStatement: corroboration?.statement ?? null,
     geologyConsulted: Boolean(corroboration),
     siteConcentration,
+    flags,
     characterInference,
   };
 }
@@ -352,6 +363,8 @@ export interface PointGeologySuccess {
   ok: true;
   geologyStatement: string;
   siteConcentration?: SiteConcentration;
+  /** Algae flag is always insufficient-data here - no catchment land cover without an NRFA gauge. Inhibition flag uses the real geology just read. */
+  flags: SiteFlags;
   characterInference: CharacterInference;
 }
 
@@ -378,10 +391,16 @@ export async function screenPointGeology(easting: number, northing: number): Pro
       message: "BGS has no mapped geology at this point either, so there is nothing to infer solids character from.",
     };
   }
+  const flags = assessSiteFlags(
+    null, // no NRFA catchment at all on this path - algae flag is honestly insufficient-data
+    { bedrock: corroboration.bedrockLithology ?? null, superficial: corroboration.superficialLithology ?? null },
+  );
+
   return {
     ok: true,
     geologyStatement: corroboration.statement,
     siteConcentration,
+    flags,
     characterInference: inferCharacterFromGeologyOnly(corroboration),
   };
 }

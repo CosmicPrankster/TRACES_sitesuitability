@@ -6,6 +6,7 @@ import type { Resolution, StationMatch } from "@/lib/resolve";
 import type { Psd } from "@/lib/psd";
 import type { Category, MembraneAssessment, UpliftResult } from "@/lib/assessment";
 import type { ScreeningReport } from "@/lib/report";
+import type { SiteFlags } from "@/lib/flags";
 
 export interface CharacterData {
   psd: Psd;
@@ -42,6 +43,8 @@ interface Screened {
   geologyConsulted?: boolean;
   /** A real measured solids concentration near the site (EA Water Quality Archive), if one was found - see lib/live-site.ts's fetchSiteConcentration. */
   siteConcentration?: { mgL: number; source: string } | null;
+  /** Algae/inhibition risk flags (lib/flags.ts) - independent of characterInference, shown alongside it, never blended into it. */
+  flags: SiteFlags;
   characterInference: CharacterInference;
   psd: Psd;
   assessments: MembraneAssessment[];
@@ -82,6 +85,12 @@ const CATEGORY_STYLE: Record<Category | "insufficient-data", { label: string; cl
   marginal: { label: "Marginal", className: "cell-marginal" },
   unlikely: { label: "Unlikely", className: "cell-unlikely" },
   "insufficient-data": { label: "No data", className: "cell-insufficient" },
+};
+
+const FLAG_RISK_STYLE: Record<SiteFlags["algae"]["risk"], { label: string; className: string }> = {
+  elevated: { label: "Elevated", className: "flag-marginal" },
+  low: { label: "Low", className: "flag-strong" },
+  "insufficient-data": { label: "No data", className: "flag-insufficient" },
 };
 
 const RECOMMENDATION_LABEL: Record<string, string> = {
@@ -131,6 +140,8 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
           source: "geology-only",
           geocode: data.geocode,
           geologyStatement: data.geologyStatement,
+          siteConcentration: data.siteConcentration,
+          flags: data.flags,
           characterInference: data.characterInference,
           psd: data.psd,
           assessments: data.assessments,
@@ -318,6 +329,22 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
               <li key={i}>{line}</li>
             ))}
           </ul>
+          <div className="flags-row">
+            <p>
+              <strong>Algae risk:</strong>{" "}
+              <span className={`flag-pill ${FLAG_RISK_STYLE[live.flags.algae.risk].className}`}>
+                {FLAG_RISK_STYLE[live.flags.algae.risk].label}
+              </span>{" "}
+              <span className="hint">{live.flags.algae.reasoning}</span>
+            </p>
+            <p>
+              <strong>Organic/inhibition risk:</strong>{" "}
+              <span className={`flag-pill ${FLAG_RISK_STYLE[live.flags.inhibition.risk].className}`}>
+                {FLAG_RISK_STYLE[live.flags.inhibition.risk].label}
+              </span>{" "}
+              <span className="hint">{live.flags.inhibition.reasoning}</span>
+            </p>
+          </div>
         </section>
       )}
 

@@ -197,6 +197,49 @@ real data existed, clearly-labelled synthetic fixtures (built from real
 determinand codes) where it didn't. 237/237 tests pass, `tsc --noEmit` and
 `next build` both clean.
 
+### Rebuild phase 4: organics/algae/inhibition flags (`lib/flags.ts`)
+
+No new external source - built entirely from data already flowing through
+the pipeline. Two independent flags, never blended into the mineral-
+character verdict (the plan's own explicit requirement): a confident
+"likely" for sand/silt fouling can sit right next to an "elevated" algae
+flag without the flag dragging the category down, because the two fail by
+different mechanisms (cake filtration vs. biological growth/gel-layer
+formation vs. DOC adsorption) that a hydrocyclone, separating on density,
+does little for either way.
+
+**Algae risk** splits into two separate facts rather than one collapsed
+flag: whether the catchment is nutrient-enriched enough to matter
+(cropland/built-up fraction, already available from NRFA - reused the same
+thresholds `character.ts` already uses for "heavy arable") - a fixed
+catchment property - and whether the assessment is happening during the
+UK's typical bloom season (April-September) - a fact about today, not the
+catchment. A report read in January says the risk exists without implying
+it's active right now.
+
+**Inhibition risk** reads peat from the mapped BGS lithology at the same
+point the character-inference tier-descent already fetched, rather than
+adding a second BGS call - added a named `isPeat()` export to
+`lib/geology.ts` alongside the existing `isCrystallineBedrock()`, reusing
+the word-boundary pattern `LITHOLOGY_RULES` already matched peat on. This
+only reports geology when the tier-5/6 descent (phase 2) actually fetched
+it; deliberately does NOT force an extra fetch purely for this flag, since
+peat catchments already tend to read impermeable-bedrock-dominant, which
+phase 2's own trap-check rule already fetches for independently. Labelled
+honestly as a peat proxy, not a dissolved-organic-carbon measurement - no
+DOC source exists in this project.
+
+Both flags have a real third state, `"insufficient-data"`, distinct from a
+guessed `"low"` - no catchment land cover (ungauged site) or no geology
+checked at all both report that honestly rather than defaulting silently.
+
+14 new tests (`tests/flags.test.ts`, including `isPeat`). Wired into
+`screenStation`/`screenPointGeology`
+(`lib/live-site.ts`) and both API routes; a minimal but real UI surface
+added to `ReportView.tsx` (a labelled risk pill + reasoning per flag,
+reusing the existing colour tokens). 251/251 tests pass, `tsc --noEmit`
+and `next build` both clean.
+
 ### Two findings that mattered more than the pass/fail list
 
 **The v1 probe reported empty responses as "ok".** That hid the BGS failure

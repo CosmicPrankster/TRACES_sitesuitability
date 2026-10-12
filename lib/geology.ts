@@ -149,6 +149,19 @@ export function isCrystallineBedrock(lithology: string | null): boolean {
   return !!lithology && CRYSTALLINE_PATTERN.test(lithology);
 }
 
+/**
+ * Whether a lithology is peat - the flag lib/flags.ts's inhibition-risk
+ * assessment needs. Reuses the same word-boundary pattern LITHOLOGY_RULES
+ * already matches peat on, as its own named export rather than making a
+ * caller re-derive it from readLithology's coarseness number (-0.9 is not
+ * a self-evidently peat-specific value to match against).
+ */
+const PEAT_PATTERN = /\bpeat\b/i;
+
+export function isPeat(lithology: string | null): boolean {
+  return !!lithology && PEAT_PATTERN.test(lithology);
+}
+
 /* -------------------------------------------------------------------- */
 
 export interface GeologyAtPoint {

@@ -186,6 +186,9 @@ export interface GeologyCorroboration {
   bedrockIsCrystalline?: boolean;
   /** True when the superficial deposit is coarse and not the river's own alluvium. */
   coarseSuperficial?: boolean;
+  /** Raw lithology strings, for callers that need more than the coarseness score - e.g. lib/flags.ts's peat check. Not used by inferCharacter itself. */
+  bedrockLithology?: string | null;
+  superficialLithology?: string | null;
 }
 
 export function inferCharacter(

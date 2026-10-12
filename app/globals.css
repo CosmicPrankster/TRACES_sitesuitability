@@ -292,6 +292,42 @@ table.grid tbody th[scope="row"] {
   border-color: currentColor;
 }
 
+.flags-row {
+  margin-top: 0.5rem;
+}
+
+.flags-row p {
+  margin: 0.35rem 0;
+}
+
+.flags-row .hint {
+  display: inline;
+  margin: 0;
+}
+
+.flag-pill {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 0.1rem 0.6rem;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.flag-strong {
+  background: var(--strong-bg);
+  color: var(--strong);
+}
+
+.flag-marginal {
+  background: var(--marginal-bg);
+  color: var(--marginal);
+}
+
+.flag-insufficient {
+  background: var(--insufficient-bg);
+  color: var(--insufficient);
+}
+
 .cell-detail {
   background: var(--surface);
   border: 1px solid var(--border);
