@@ -62,20 +62,33 @@ hierarchy of sources that stops at the first tier with usable data. See
 each tier's live/untested/dropped status — it is not repeated here to avoid
 the two files drifting apart again.
 
-`npm test` — 297 tests, no network, no API keys.
+`npm test` — 325 tests, no network, no API keys.
 `npx tsc --noEmit` / `npx next build` — both clean.
 `node --env-file=.env.local scripts/probe-new-sources.mjs` — needs internet,
 optional API keys for the tide and satellite tiers.
 
+**Verified live since the above was written**, both against a real
+`"Tilford, River Wey"` probe run (2026-10-12):
+- The chat/conversational layer (`lib/chat-intake.ts`) is built and wired
+  into `/api/field-update` and the UI - a deterministic parser, not an LLM
+  call (this project has no AI SDK dependency), on the standing rule that
+  parsing never scores.
+- **The tide tier is proven end-to-end against a real Admiralty API key.**
+  The real 607-station list and a real 7-day `TidalEvents` response both
+  matched `lib/sources/tide.ts`'s types exactly - no code changes needed.
+  Tilford itself correctly found no station within 5 km and skipped the
+  tier, which is the correct behaviour for an inland, non-tidal reach, not
+  a bug.
+
 **Still genuinely open**, not yet built:
-- The chat/conversational layer on top of `lib/field-update.ts` (free-text
-  intake parsed into the same structured fields the form already takes — AI
-  parses, never scores).
-- The satellite-turbidity data-query shape (only the OAuth2 step against
-  Copernicus is proven live; the query itself is a labelled guess in
-  `scripts/probe-new-sources.mjs`).
-- The tide tier (`lib/sources/tide.ts`) has never run end-to-end against a
-  real Admiralty API key.
+- The satellite-turbidity data-query shape. A live run reached the real
+  `sh.dataspace.copernicus.eu` Statistical API (OAuth2 + the endpoint
+  itself both proven) and got back a precise HTTP 400, not a 403/404: a
+  pixel-size error traced to `resx`/`resy` being read in the bbox's own CRS
+  units (degrees, for the v1 EPSG:4326 bbox) rather than metres. Fixed in
+  `scripts/probe-new-sources.mjs` by switching the bbox to EPSG:3857 (Web
+  Mercator) - a second guess, informed by a real error this time, still not
+  proven until it's run again.
 - `data/query-log.json`'s "site-run" half (a real screened site's prediction
   checked against reality) - the "bench-validation" half, checked against
   every real trial in `data/trials.json`, is built (`scripts/build-query-
@@ -134,7 +147,9 @@ to relax them.
    new tier this project has ever added (EA Water Quality, tide, satellite)
    was probed live with `scripts/probe*.mjs` before a line of production
    code was written against it. Satellite turbidity still has no production
-   code for exactly this reason — only the OAuth2 step is proven.
+   code for exactly this reason — the OAuth2 step and the Statistical API
+   endpoint itself are proven, but the request shape it actually accepts
+   (bbox/resolution units) is not, yet.
 2. **Never report an empty response as a success.** The v1 probe did, and it
    hid the single most important failure for days.
 3. **Every number carries its status** — `guessed`, `field-adjusted`,

@@ -338,21 +338,28 @@ if (!tideKey) {
 console.log();
 
 /* ---- 5. Satellite turbidity (Sentinel-2/3) - needs real credentials ----- */
-// Rebuild phase 6: OAuth2 alone (below) was proven live in phase 0, but the
-// actual DATA query was never attempted - this tool has never fetched one
-// real satellite turbidity figure. The statistics request below is a
-// best-effort GUESS at the real Sentinel Hub Statistical API shape (base
-// URL, request body, evalscript), the same kind of first attempt EA Water
-// Quality's original 5-URL guess was before the real spec was found - it
-// is NOT built on by any lib/ code until this proves (or corrects) it live.
-// If this 403/404s or the body shape is wrong, that is exactly the signal
-// needed to find the real endpoint, same discipline as every other source.
+// Rebuild phase 6: OAuth2 alone (below) was proven live in phase 0. The
+// actual DATA query was first attempted with a bbox in EPSG:4326 (lon/lat
+// degrees) and resx/resy: 10 - a real live run against that shape got a
+// real, specific HTTP 400 back, not a 403/404: "Pixel size of 2224.53
+// meters per pixel exceeds the limit 1500.00 meters per pixel for
+// collection S2L2A." 2224.53 m is (to rounding) exactly the bbox's own
+// height in meters at this latitude - the API collapsed the whole bbox
+// into ONE pixel, which happens when resx/resy is read in the bbox's own
+// CRS units. For an EPSG:4326 bbox that unit is DEGREES, so "10" meant 10
+// degrees - far bigger than the ~0.02-degree bbox - not 10 metres as
+// intended. This v2 attempt switches the bbox to EPSG:3857 (Web Mercator,
+// metres) so resx/resy: 10 means what it says - the standard pattern
+// Sentinel Hub's own Statistical API examples use for a metre-based
+// resolution. Still a GUESS, not yet proven: if this 400s again, the
+// error message is the next real clue, same discipline as every other
+// source this project has built on.
 console.log(`${c.cyan}5. Satellite turbidity (Copernicus Data Space)${c.reset}`);
 const chId = process.env.COPERNICUS_CLIENT_ID;
 const chSecret = process.env.COPERNICUS_CLIENT_SECRET;
 if (!chId || !chSecret) {
   skip("OAuth2 token request", "COPERNICUS_CLIENT_ID / COPERNICUS_CLIENT_SECRET not set - see .env.local.example");
-  skip("Sentinel Hub statistics request (guessed shape)", "needs the OAuth2 token above");
+  skip("Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox)", "needs the OAuth2 token above");
 } else {
   const tokenRes = await fetch("https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token", {
     method: "POST",
@@ -373,13 +380,27 @@ if (!chId || !chSecret) {
   }
 
   if (!accessToken) {
-    skip("Sentinel Hub statistics request (guessed shape)", "no access token obtained above");
+    skip("Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox)", "no access token obtained above");
   } else {
     // GUESSED base URL and path - sh.dataspace.copernicus.eu is Copernicus
     // Data Space's documented Sentinel Hub-compatible endpoint as of this
     // tool's training data, but that is exactly the kind of claim this
-    // project insists on proving live, not trusting from memory.
-    const half = 0.01; // ~1 km box around the test point, in degrees - rough on purpose, this is a guess being tested
+    // project insists on proving live, not trusting from memory. Proven
+    // live in v1: the base URL and path themselves returned a real,
+    // specific API error, not a 404 - only the bbox/resolution unit
+    // mismatch (see comment above) was wrong.
+    //
+    // lon/lat -> EPSG:3857 (Web Mercator), standard spherical formula -
+    // not the OSGB36/BNG transform scripts/lib/bng.mjs uses, a different
+    // projection for a different purpose (this one only needs to match
+    // what Sentinel Hub expects for a metres-based bbox+resolution).
+    const R = 6378137; // Web Mercator sphere radius, metres
+    const toMercator = (lonDeg, latDeg) => ({
+      x: (lonDeg * Math.PI * R) / 180,
+      y: R * Math.log(Math.tan(Math.PI / 4 + (latDeg * Math.PI) / 360)),
+    });
+    const center = toMercator(lon, lat);
+    const halfM = 1100; // ~2.2 km box around the test point, in metres - same real-world scale as v1's 0.01-degree box
     const today = new Date();
     const monthAgo = new Date(today.getTime() - 30 * 24 * 60 * 60 * 1000);
     const iso = (d) => d.toISOString().slice(0, 10);
@@ -398,8 +419,8 @@ function evaluatePixel(s) {
     const statsBody = {
       input: {
         bounds: {
-          bbox: [lon - half, lat - half, lon + half, lat + half],
-          properties: { crs: "http://www.opengis.net/def/crs/EPSG/0/4326" },
+          bbox: [center.x - halfM, center.y - halfM, center.x + halfM, center.y + halfM],
+          properties: { crs: "http://www.opengis.net/def/crs/EPSG/0/3857" },
         },
         data: [{ type: "sentinel-2-l2a", dataFilter: { timeRange: { from: `${iso(monthAgo)}T00:00:00Z`, to: `${iso(today)}T23:59:59Z` }, maxCloudCoverage: 60 } }],
       },
@@ -422,11 +443,11 @@ function evaluatePixel(s) {
       try { body = JSON.parse(text); } catch { /* keep text */ }
       const outcome = statsRes.ok ? "ok" : "fail";
       const label = outcome === "ok" ? c.green + "ok  " : c.red + "FAIL";
-      console.log(`  ${label}${c.reset} Sentinel Hub statistics request (guessed shape) ${c.dim}${statsRes.status}, ${text.length} b${c.reset}`);
-      results.push({ name: "Sentinel Hub statistics request (guessed shape)", url: "https://sh.dataspace.copernicus.eu/api/v1/statistics", outcome, httpStatus: statsRes.status, bytes: text.length, body });
+      console.log(`  ${label}${c.reset} Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox) ${c.dim}${statsRes.status}, ${text.length} b${c.reset}`);
+      results.push({ name: "Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox)", url: "https://sh.dataspace.copernicus.eu/api/v1/statistics", outcome, httpStatus: statsRes.status, bytes: text.length, body });
     } else {
-      console.log(`  ${c.red}FAIL${c.reset} Sentinel Hub statistics request (guessed shape) ${c.dim}${statsRes._err?.message}${c.reset}`);
-      results.push({ name: "Sentinel Hub statistics request (guessed shape)", outcome: "fail", error: statsRes._err?.message });
+      console.log(`  ${c.red}FAIL${c.reset} Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox) ${c.dim}${statsRes._err?.message}${c.reset}`);
+      results.push({ name: "Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox)", outcome: "fail", error: statsRes._err?.message });
     }
   }
 }

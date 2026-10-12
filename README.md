@@ -75,9 +75,9 @@ boundary (see `lib/character.ts`'s `worthCorroboratingWithGeology`).
 | 1 | On-site field reading (grain card / settle test / turbidity tube) | **live** — `lib/field-update.ts`, supersedes everything below for this session |
 | 2 | EA Water Quality Archive (real measured suspended-solids concentration) | **live** — `lib/sources/water-quality.ts` |
 | 3 | NRFA catchment properties + BGS point geology (bedrock, base flow, arable %) | **live** — `lib/character.ts`, `lib/geology.ts` |
-| — | Tide state (estuaries: flood/ebb, spring/neap) — confidence context, not a verdict input | **live, untested with a real key** — `lib/sources/tide.ts` |
+| — | Tide state (estuaries: flood/ebb, spring/neap) — confidence context, not a verdict input | **live, verified against a real key** — `lib/sources/tide.ts` |
 | — | Algae / organic-inhibition flags — independent of the mineral verdict | **live** — `lib/flags.ts` |
-| — | Satellite turbidity (Sentinel-2/3) | **not built** — only the OAuth step is proven; see BUILD.md |
+| — | Satellite turbidity (Sentinel-2/3) | **not built** — OAuth2 and the base statistics endpoint are both proven live; only the bbox/resolution request shape is still being corrected, see HANDOFF.md |
 | — | Soil texture (Soilscapes/UKSO) | **dropped** — no working source found; see BUILD.md |
 
 Every tier names its own confidence and what would improve it. Nothing
@@ -142,7 +142,7 @@ key; copy `.env.local.example` to `.env.local` and fill in what you have.
 Missing a key means that tier is skipped, not broken:
 
 - `ADMIRALTY_TIDE_API_KEY` — tide state for estuarine sites (free tier at
-  [developer.admiralty.co.uk](https://developer.admiralty.co.uk/))
+  [developer.admiralty.co.uk](https://developer.admiralty.co.uk/)); **verified live**
 - `COPERNICUS_CLIENT_ID` / `COPERNICUS_CLIENT_SECRET` — not yet used by any
   live tier (satellite turbidity isn't built); only `scripts/probe-new-sources.mjs` uses these today
 
@@ -191,19 +191,26 @@ plain-language log on each card.
    real benefit by roughly 3–10×. What's left is the "site-run" half: the
    same check for a real screened site, which needs a real site trial
    first (next step 7, new).
-3. **Verify the tide-state tier against a real key** — `lib/sources/tide.ts`
-   is built and unit-tested against real captured data, but has never run
-   end-to-end against the live Admiralty API in this project.
-4. **One more live probe round for satellite turbidity** — `scripts/probe-new-sources.mjs`
-   has a best-effort, clearly-labelled guess at the real Sentinel Hub
-   endpoint; running it with real Copernicus credentials would say whether
-   that guess is right, which is the one thing standing between "not
-   built" and a real `lib/sources/satellite-turbidity.ts`.
-5. **The chat/conversational layer** — the original plan's point 3 ("on-site
-   update through the chat bot"). The deterministic structured-form version
-   of this is built (`lib/field-update.ts`); a free-text/conversational
-   front end on top of it, with AI only ever parsing words into those same
-   structured fields, never scoring anything, is not.
+3. ~~**Verify the tide-state tier against a real key**~~ — done. Run live
+   against a real `ADMIRALTY_TIDE_API_KEY` for Tilford: the real 607-station
+   list and a real 7-day `TidalEvents` response both matched
+   `lib/sources/tide.ts`'s types exactly, no code changes needed. Tilford
+   itself correctly found no station within 5 km (it's the upper, non-tidal
+   Wey) and skipped the tier - exactly the intended behaviour, not a bug.
+4. **Satellite turbidity - one guess down, close but not there.** The first
+   live attempt reached the real endpoint and got back a precise, specific
+   HTTP 400 (not a 403/404): a pixel-size error that traced to resx/resy
+   being read in the bbox's own CRS units - degrees, for an EPSG:4326 bbox,
+   not the intended metres. `scripts/probe-new-sources.mjs` now sends the
+   bbox in EPSG:3857 (Web Mercator) instead, the standard fix for a
+   metres-based resolution - still unproven until it's run again. See
+   HANDOFF.md for the full diagnosis.
+5. ~~**The chat/conversational layer**~~ — done. `lib/chat-intake.ts` is a
+   deterministic free-text parser on top of `lib/field-update.ts`, wired
+   into `/api/field-update` and a textarea in the UI - parses a message
+   like "looks like fine sand, cleared within 10 minutes" into the same
+   structured fields the form already takes, never scores anything itself.
+   Verified live with Playwright against the running app.
 6. ~~**`lib/trials.ts` is dead code**~~ — done. It's wired into
    `lib/assessment.ts`: a trial recorded against an exact site/waterbody
    now overrides both the calibrated baseline and that hydrocyclone's
