@@ -81,14 +81,21 @@ optional API keys for the tide and satellite tiers.
   a bug.
 
 **Still genuinely open**, not yet built:
-- The satellite-turbidity data-query shape. A live run reached the real
-  `sh.dataspace.copernicus.eu` Statistical API (OAuth2 + the endpoint
-  itself both proven) and got back a precise HTTP 400, not a 403/404: a
-  pixel-size error traced to `resx`/`resy` being read in the bbox's own CRS
-  units (degrees, for the v1 EPSG:4326 bbox) rather than metres. Fixed in
-  `scripts/probe-new-sources.mjs` by switching the bbox to EPSG:3857 (Web
-  Mercator) - a second guess, informed by a real error this time, still not
-  proven until it's run again.
+- The satellite-turbidity data-query shape - two real rounds in, close but
+  not proven yet. v1 (EPSG:4326 bbox, bare resx/resy): a pixel-size HTTP
+  400 traced to `resx`/`resy` being read in the bbox's own CRS units
+  (degrees) rather than metres. v2 (bbox switched to EPSG:3857, metres):
+  that error is GONE - proof the fix was right - but a new, different real
+  error appeared: `"Output dataMask requested but missing from function
+  setup()"`. The Statistical API (unlike the plain Process API) requires an
+  evalscript to declare an explicit `dataMask` output alongside its data
+  output, not just take it as an input, so it knows which pixels to
+  exclude from the aggregated statistics. v3 (`scripts/probe-new-
+  sources.mjs`) adds that - explicit `output: [{id:"data"...}, {id:
+  "dataMask"...}]` and `evaluatePixel` returning `{data, dataMask}` instead
+  of a bare array - still not proven until it's run again. Each round has
+  gotten a real, specific, different error back, never a repeat of the
+  last one - the right signal that this is converging, not stuck.
 - `data/query-log.json`'s "site-run" half (a real screened site's prediction
   checked against reality) - the "bench-validation" half, checked against
   every real trial in `data/trials.json`, is built (`scripts/build-query-

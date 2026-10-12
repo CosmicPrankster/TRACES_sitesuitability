@@ -359,7 +359,7 @@ const chId = process.env.COPERNICUS_CLIENT_ID;
 const chSecret = process.env.COPERNICUS_CLIENT_SECRET;
 if (!chId || !chSecret) {
   skip("OAuth2 token request", "COPERNICUS_CLIENT_ID / COPERNICUS_CLIENT_SECRET not set - see .env.local.example");
-  skip("Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox)", "needs the OAuth2 token above");
+  skip("Sentinel Hub statistics request (guessed shape, v3 - EPSG:3857 bbox + explicit dataMask output)", "needs the OAuth2 token above");
 } else {
   const tokenRes = await fetch("https://identity.dataspace.copernicus.eu/auth/realms/CDSE/protocol/openid-connect/token", {
     method: "POST",
@@ -380,7 +380,7 @@ if (!chId || !chSecret) {
   }
 
   if (!accessToken) {
-    skip("Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox)", "no access token obtained above");
+    skip("Sentinel Hub statistics request (guessed shape, v3 - EPSG:3857 bbox + explicit dataMask output)", "no access token obtained above");
   } else {
     // GUESSED base URL and path - sh.dataspace.copernicus.eu is Copernicus
     // Data Space's documented Sentinel Hub-compatible endpoint as of this
@@ -388,7 +388,14 @@ if (!chId || !chSecret) {
     // project insists on proving live, not trusting from memory. Proven
     // live in v1: the base URL and path themselves returned a real,
     // specific API error, not a 404 - only the bbox/resolution unit
-    // mismatch (see comment above) was wrong.
+    // mismatch (see comment above) was wrong. v2 fixed that (EPSG:3857
+    // bbox below) and got a DIFFERENT real error: "Output dataMask
+    // requested but missing from function setup()" - the Statistical API
+    // (unlike the plain Process API) requires an evalscript to declare an
+    // EXPLICIT "dataMask" output alongside its data output, and
+    // evaluatePixel to return {data, dataMask} rather than a bare array,
+    // so it knows which pixels to exclude from the aggregated statistics.
+    // v3 (below) adds that.
     //
     // lon/lat -> EPSG:3857 (Web Mercator), standard spherical formula -
     // not the OSGB36/BNG transform scripts/lib/bng.mjs uses, a different
@@ -407,14 +414,24 @@ if (!chId || !chSecret) {
     // NDTI (Normalized Difference Turbidity Index, Lacaux et al.) from
     // Sentinel-2 L2A red/green bands - a real, published turbidity proxy,
     // not an invented formula; what's unproven here is only whether THIS
-    // API will actually evaluate it in this request shape.
+    // API will actually evaluate it in this request shape. v3: explicit
+    // "data" + "dataMask" outputs, per the real v2 error above.
     const evalscript = `
 //VERSION=3
 function setup() {
-  return { input: ["B04", "B03", "dataMask"], output: { bands: 1 } };
+  return {
+    input: [{ bands: ["B04", "B03", "dataMask"] }],
+    output: [
+      { id: "data", bands: 1, sampleType: "FLOAT32" },
+      { id: "dataMask", bands: 1 }
+    ]
+  };
 }
 function evaluatePixel(s) {
-  return [(s.B04 - s.B03) / (s.B04 + s.B03 + 1e-6)];
+  return {
+    data: [(s.B04 - s.B03) / (s.B04 + s.B03 + 1e-6)],
+    dataMask: [s.dataMask]
+  };
 }`;
     const statsBody = {
       input: {
@@ -443,11 +460,11 @@ function evaluatePixel(s) {
       try { body = JSON.parse(text); } catch { /* keep text */ }
       const outcome = statsRes.ok ? "ok" : "fail";
       const label = outcome === "ok" ? c.green + "ok  " : c.red + "FAIL";
-      console.log(`  ${label}${c.reset} Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox) ${c.dim}${statsRes.status}, ${text.length} b${c.reset}`);
-      results.push({ name: "Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox)", url: "https://sh.dataspace.copernicus.eu/api/v1/statistics", outcome, httpStatus: statsRes.status, bytes: text.length, body });
+      console.log(`  ${label}${c.reset} Sentinel Hub statistics request (guessed shape, v3 - EPSG:3857 bbox + explicit dataMask output) ${c.dim}${statsRes.status}, ${text.length} b${c.reset}`);
+      results.push({ name: "Sentinel Hub statistics request (guessed shape, v3 - EPSG:3857 bbox + explicit dataMask output)", url: "https://sh.dataspace.copernicus.eu/api/v1/statistics", outcome, httpStatus: statsRes.status, bytes: text.length, body });
     } else {
-      console.log(`  ${c.red}FAIL${c.reset} Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox) ${c.dim}${statsRes._err?.message}${c.reset}`);
-      results.push({ name: "Sentinel Hub statistics request (guessed shape, v2 - EPSG:3857 bbox)", outcome: "fail", error: statsRes._err?.message });
+      console.log(`  ${c.red}FAIL${c.reset} Sentinel Hub statistics request (guessed shape, v3 - EPSG:3857 bbox + explicit dataMask output) ${c.dim}${statsRes._err?.message}${c.reset}`);
+      results.push({ name: "Sentinel Hub statistics request (guessed shape, v3 - EPSG:3857 bbox + explicit dataMask output)", outcome: "fail", error: statsRes._err?.message });
     }
   }
 }

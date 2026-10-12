@@ -197,13 +197,13 @@ plain-language log on each card.
    `lib/sources/tide.ts`'s types exactly, no code changes needed. Tilford
    itself correctly found no station within 5 km (it's the upper, non-tidal
    Wey) and skipped the tier - exactly the intended behaviour, not a bug.
-4. **Satellite turbidity - one guess down, close but not there.** The first
-   live attempt reached the real endpoint and got back a precise, specific
-   HTTP 400 (not a 403/404): a pixel-size error that traced to resx/resy
-   being read in the bbox's own CRS units - degrees, for an EPSG:4326 bbox,
-   not the intended metres. `scripts/probe-new-sources.mjs` now sends the
-   bbox in EPSG:3857 (Web Mercator) instead, the standard fix for a
-   metres-based resolution - still unproven until it's run again. See
+4. **Satellite turbidity - two guesses down, converging.** v1 (EPSG:4326
+   bbox) got a pixel-size HTTP 400. v2 fixed that (bbox in EPSG:3857,
+   metres) and the pixel-size error is gone, replaced by a new, different
+   real error: `"Output dataMask requested but missing from function
+   setup()"` - the Statistical API needs an explicit `dataMask` output in
+   the evalscript, not just as an input. v3 (`scripts/probe-new-
+   sources.mjs`) adds that - still unproven until it's run again. See
    HANDOFF.md for the full diagnosis.
 5. ~~**The chat/conversational layer**~~ — done. `lib/chat-intake.ts` is a
    deterministic free-text parser on top of `lib/field-update.ts`, wired
