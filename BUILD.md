@@ -107,6 +107,40 @@ only changes *whether* BGS gets called, not what happens once it answers.
 already in the file; 217/217 tests pass, `tsc --noEmit` and `next build`
 clean.
 
+### Rebuild phase 3: EA Water Quality Archive, finding the real shape (in progress)
+
+A wider (25 km) sampling-point search near Tilford turned up 20 real points
+of six different types: `GROUNDWATER - BOREHOLE`, `GROUNDWATER - SPRING`,
+`SEWAGE - CRUDE TO FURTHER TREATMENT - WATER COMPANY`,
+`SEWAGE DISCHARGES - FINAL/TREATED EFFLUENT - NOT WATER COMPANY`,
+`TRADE DISCHARGES - PROCESS EFFLUENT - WATER COMPANY (WTW)`, and
+`FRESHWATER - UNSPECIFIED` - the last being the one that actually means
+"ordinary river/stream reading" (real example: "DOWNSTREAM RUDGWICK
+STW,RIVER ARUN"). `properties.type` carries this as a plain label string,
+not a short code - the earlier guess that it would be under `@id`/`id` was
+wrong, found by printing the real response's own keys rather than assuming.
+
+The OpenAPI spec's real path list (printed directly now, not just saved to
+a file) confirmed where readings actually live:
+`/sampling-point/{pointNotation}/observation` for one point,
+`/data/observation` (POST) for a filtered multi-point search including
+lat/lon/radius - both accepting a `determinand` code filter. The
+`/codelist/determinand` endpoint supports a `prefLabel` contains-search, so
+the real codes for suspended solids and turbidity can be looked up by name
+instead of guessed or scraped from a full listing.
+
+One dead end, recorded so it isn't re-tried: `/codelist/sampling-point-type
+?limit=200` came back **403 from an Azure Application Gateway**, not from
+the API itself (the body is generic Azure HTML, not a FastAPI validation
+error) - likely a WAF rule, not a real limit (the spec's own schema allows
+up to 250). Not blocking: the freshwater type is already proven from real
+point data above, so this codelist was only needed for a short notation
+code this tier doesn't actually require.
+
+Waiting on one more live run (extended probe, same workflow) to confirm the
+real determinand codes and the real shape of an actual observation record
+before building `lib/sources/water-quality.ts` against it.
+
 ### Two findings that mattered more than the pass/fail list
 
 **The v1 probe reported empty responses as "ok".** That hid the BGS failure

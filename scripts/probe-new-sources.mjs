@@ -152,31 +152,68 @@ if (wqItems.length) {
   }
   for (const [t, n] of Object.entries(byType)) console.log(`       ${c.dim}${n}x ${t}${c.reset}`);
 
-  // Follow the first point's own linked-data identity, whatever field it
-  // actually carries it in - printing the raw keys rather than assuming
-  // "@id" so a wrong guess here is visible immediately, not silent.
-  const first = wqItems[0];
-  const selfUri = first["@id"] ?? first.id ?? first.properties?.["@id"] ?? first.properties?.id ?? null;
-  console.log(`     ${c.dim}first point's own keys: ${Object.keys(first).join(", ")}${c.reset}`);
-  if (first.properties) console.log(`     ${c.dim}first point's properties keys: ${Object.keys(first.properties).join(", ")}${c.reset}`);
-  if (selfUri) {
-    await get("first sampling point's own linked-data resource", selfUri, { accept: "application/ld+json" });
-  } else {
-    console.log(`     ${c.yellow}no obvious self-link field on the point - can't follow it to find readings${c.reset}`);
+  // An EARLIER RUN found the real type field is properties.type, a plain
+  // label string ("FRESHWATER - UNSPECIFIED" for an ordinary river/stream
+  // point, as opposed to "GROUNDWATER - ..." or "SEWAGE - ..."/"TRADE
+  // DISCHARGES - ..." for the others) - not a short code, and not under
+  // "@id"/"id" as first guessed. Filtering on that confirmed label here,
+  // client-side, rather than chasing the sampling-point-type codelist's
+  // own short notation (that broad fetch 403'd from an Azure gateway last
+  // run - see below - and isn't needed: this label is already proven).
+  const freshwaterPoints = wqItems.filter((p) => p.properties?.type === "FRESHWATER - UNSPECIFIED");
+  console.log(`     ${c.dim}${freshwaterPoints.length} of those are ordinary freshwater (river/stream) points${c.reset}`);
+  for (const p of freshwaterPoints) {
+    console.log(`       ${c.dim}${p.properties?.notation} - ${p.properties?.name}${c.reset}`);
   }
 
-  // Real type codes, to confirm which one(s) mean "ambient river/
-  // watercourse" rather than sewage-discharge/effluent, rather than
-  // guessing from the label text alone.
-  const codelist = await get("sampling-point-type codelist",
-    "https://environment.data.gov.uk/water-quality/codelist/sampling-point-type?limit=200",
-    { accept: "application/geo+json" });
-  const codeItems = codelist?.member ?? codelist?.items ?? [];
-  if (codeItems.length) {
-    console.log(`     ${c.dim}${codeItems.length} known sampling-point types:${c.reset}`);
-    for (const t of codeItems) {
-      console.log(`       ${c.dim}${t.notation ?? t.id ?? "?"} - ${t.label ?? t.name ?? "?"}${c.reset}`);
-    }
+  // A smaller, TARGETED codelist search instead of the broad limit=200 list
+  // that 403'd last run (Azure Application Gateway rejected it outright,
+  // before the request even reached the API - a WAF/infra block, not a
+  // validation error). This confirms the short notation code for the
+  // freshwater type, in case samplingPointType-filtered queries are wanted
+  // later; it is NOT required for anything below, which uses the already-
+  // proven plain-label filter above instead.
+  await get("sampling-point-type codelist, filtered to freshwater",
+    "https://environment.data.gov.uk/water-quality/codelist/sampling-point-type?prefLabel=freshwater&limit=10",
+    { accept: "application/ld+json" });
+
+  // The determinand codelist supports the same prefLabel contains-search -
+  // confirming the real codes for suspended solids and turbidity rather
+  // than guessing at a notation.
+  const suspendedSolids = await get("determinand codelist, filtered to suspended solids",
+    "https://environment.data.gov.uk/water-quality/codelist/determinand?prefLabel=suspended%20solids&limit=10",
+    { accept: "application/ld+json" });
+  const turbidity = await get("determinand codelist, filtered to turbidity",
+    "https://environment.data.gov.uk/water-quality/codelist/determinand?prefLabel=turbidity&limit=10",
+    { accept: "application/ld+json" });
+
+  const determinandNotation = (body) => {
+    const items = body?.member ?? body?.items ?? [];
+    return items[0]?.notation ?? items[0]?.id ?? null;
+  };
+  const ssCode = determinandNotation(suspendedSolids);
+  const turbCode = determinandNotation(turbidity);
+  console.log(`     ${c.dim}suspended-solids determinand code: ${ssCode ?? "not found"}${c.reset}`);
+  console.log(`     ${c.dim}turbidity determinand code: ${turbCode ?? "not found"}${c.reset}`);
+
+  // The actual payoff of this whole tier: real readings, for a real
+  // ordinary-river point, for whichever determinand code was just found -
+  // closing the loop on "where do the numbers live" in one run instead of
+  // a third probing round, if the codelist lookups above succeeded.
+  const codes = [ssCode, turbCode].filter(Boolean).join(",");
+  const targetPoint = freshwaterPoints[0]?.properties?.notation;
+  if (targetPoint && codes) {
+    await get("real observations for a freshwater point, filtered to those determinands",
+      `https://environment.data.gov.uk/water-quality/sampling-point/${targetPoint}/observation?determinand=${codes}&limit=20`,
+      { accept: "application/ld+json" });
+  } else if (targetPoint) {
+    // Still worth seeing the shape of a real observation, unfiltered, even
+    // if the determinand lookup above didn't resolve a code.
+    await get("real observations for a freshwater point (unfiltered)",
+      `https://environment.data.gov.uk/water-quality/sampling-point/${targetPoint}/observation?limit=10`,
+      { accept: "application/ld+json" });
+  } else {
+    console.log(`     ${c.yellow}no freshwater point in range to fetch real observations for${c.reset}`);
   }
 } else {
   console.log(`     ${c.yellow}none within 25 km either, or the endpoint shape has changed${c.reset}`);
