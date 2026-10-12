@@ -91,38 +91,17 @@ function skip(name, reason) {
 
 console.log(`\n${c.bold}Probing new sources (rebuild phase 0) at:${c.reset} ${lat}, ${lon}\n`);
 
-/* ---- 1. Soil texture: Soilscapes (Cranfield LandIS) + UKSO -------------- */
-// Cranfield publish Soilscapes as a WMS (soil type / texture classes); BGS's
-// UK Soil Observatory (UKSO) separately hosts soil property WMS layers.
-// Exact current service paths are not verified from training knowledge -
-// both are tried via WMS GetCapabilities, the same "ask the service what it
-// actually serves" approach proven out for BGS in scripts/probe.mjs, rather
-// than guessing a GetFeatureInfo layer name blind.
-console.log(`${c.cyan}1. Soil texture (Soilscapes / UKSO)${c.reset}`);
-// landis.org.uk's Soilscapes service is DROPPED: four real, independent
-// attempts (WMS GetCapabilities, a FeatureServer query, and a bare
-// metadata request with no query at all) failed differently each time,
-// the last one with an explicit, specific error from Cranfield's own
-// server - "No Layer or Table was initialized" - confirming this is a
-// broken data layer on their infrastructure, not a wrong URL or request
-// shape on this project's end. Not worth chasing further.
-await get("Soilscapes ArcGIS services directory listing (landis.org.uk) - service exists, data layer is broken",
-  "https://www.landis.org.uk/arcgis/rest/services/Soilscapes?f=json");
-// LandIS's ArcGIS Online org (found via the user's API Explorer) only
-// hosts a token-gated auger-profile layer and a Survey123 form - no
-// texture-classification service there either.
-await get("LandIS ArcGIS Online org services directory",
-  "https://services-eu1.arcgis.com/BsCa1SurMySYByZ3/arcgis/rest/services?f=json");
-// One last, independently-hosted candidate: BGS's own UKSO folder (a
-// different host/infrastructure entirely, so not subject to whatever is
-// broken on landis.org.uk) listed a real "UKSO_BGS_NSI" service - the
-// National Soil Inventory, Cranfield's/BGS's actual texture survey data,
-// not a guessed name. This is the last soil-texture attempt - if it
-// fails too, soil texture is dropped from phase 0 like land cover was.
-await get("BGS National Soil Inventory (UKSO_BGS_NSI) WMS GetCapabilities",
-  "https://map.bgs.ac.uk/arcgis/services/UKSO/UKSO_BGS_NSI/MapServer/WMSServer?REQUEST=GetCapabilities&SERVICE=WMS&VERSION=1.3.0",
-  { accept: "text/xml" });
-console.log();
+/* ---- 1. Soil texture: CLOSED, dropped as a dedicated tier -------------- */
+// Soilscapes (landis.org.uk): four real, independently-failing attempts,
+// the last with an explicit Cranfield server error - "No Layer or Table
+// was initialized" - confirming their own data layer is broken, not a
+// wrong URL on this end. The one other independently-hosted candidate,
+// BGS's UKSO_BGS_NSI, came back real (160 KB, 101 layers) but turned out
+// to be a geochemical survey (trace elements), not texture/grain-size -
+// a different question, same as COSMOS-UK answers moisture, not texture.
+// The user independently confirmed Soilscapes' real-world coverage is
+// thin anyway. See BUILD.md. The hierarchy falls back to NRFA+BGS
+// (reframed, demoted) for this tier instead - no probe left to run here.
 
 /* ---- 2. EA Water Quality Archive - RE-PROBE with the modern linked-data API */
 // scripts/probe.mjs already tried 5 forms of this and got 404/403 on all of

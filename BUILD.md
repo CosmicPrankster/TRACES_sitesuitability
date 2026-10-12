@@ -63,13 +63,14 @@ runs.
 |---|---|
 | **Admiralty UK Tidal API** (tide state) | **Kept.** Real 607-station GeoJSON list, then real high/low-water events (heights + times) for the nearest station once the station ID field was read correctly (`feature.properties.Id`, not `feature.id` - the OpenAPI spec's own prose was wrong on this point). Needs `ADMIRALTY_TIDE_API_KEY`. |
 | **Copernicus Data Space** (satellite turbidity) | **OAuth2 proven**, full Sentinel-2/3 data fetch not yet attempted. Needs `COPERNICUS_CLIENT_ID`/`COPERNICUS_CLIENT_SECRET`. |
-| EA Water Quality Archive | **Dropped again.** `environment.data.gov.uk/water-quality/...` now serves a Next.js web dashboard (144 KB of HTML/JS), not an API - the data API this project tried once before (and already dropped, above) has been replaced by a website, not just moved. |
-| UKSO (soil texture) | **Dropped, two guesses + one directory probe tried.** `ukso.org/geoserver/wms` returns UKSO's own "404 - Page not found" page with a 200 status. A guessed BGS-hosted path (`map.bgs.ac.uk/arcgis/services/UKSO/...`) got a generic ArcGIS 400 with no service-name hint; an ArcGIS REST directory listing was tried next rather than guessing further folder names blind. |
+| **EA Water Quality Archive** | **Kept - alive again, different shape than before.** The old API this project dropped once already is gone, but a real OpenAPI spec exists at `/water-quality/api/swagger`, and `/sampling-point?latitude=&longitude=&radius=` (with `Accept: application/geo+json`) returns real points. Caveat found on the way: points near Tilford were all sewage-discharge/effluent monitoring, not ambient river stations - the right `samplingPointType` filter for ambient water quality still needs settling in Phase 4, not blocking. |
+| **COSMOS-UK** (bonus, not land cover) | **Kept.** Real OGC EDR-style API (`cosmos-api.ceh.ac.uk`), real soil-moisture sensor site found near Tilford (station `ALIC1`). Answers a different question than texture or land cover - kept on its own merits. |
+| Soil texture (Soilscapes, UKSO) | **Dropped as a dedicated tier.** Soilscapes (`landis.org.uk`): four real, independently-failing attempts, the last giving an explicit Cranfield server error - `"No Layer or Table was initialized"` - confirming their own data layer is broken, not a wrong URL. The one other independently-hosted candidate found, BGS's `UKSO_BGS_NSI`, came back real (160 KB, 101 layers) but turned out to be a geochemical survey (trace elements - silver, arsenic, cadmium, ...), not a texture/grain-size classification - a different question, like COSMOS-UK. The user independently confirmed Soilscapes' real-world coverage is thin anyway, so this isn't a significant loss. The hierarchy falls back to NRFA+BGS (reframed, demoted) for this tier - see HANDOFF.md. |
 | UKCEH Land Cover Map | **Dropped, deliberately not just technically.** `catalogue.ceh.ac.uk/maps/wms` returns HTTP 200 but the body is a MapServer backend error - their service is misconfigured server-side. But it's cut on purpose, not just because it's broken: NRFA already supplies an arable-land-cover field for any gauged catchment (Block 4's own table above - `Arable (LCM2023): 0.261` for Tilford), so a dedicated UKCEH source would only extend arable-% coverage to ungauged small catchments - a secondary benefit not worth carrying the extra complexity for, per the user's own "if something is redundant we cut it" call. |
 
-Soilscapes (Cranfield), UKSO and UKCEH LCM all need their real endpoint found
-via a browser's dev tools Network tab against the official map viewer, not
-further blind guessing - see HANDOFF.md.
+Phase 0 is now closed: tide, satellite-auth, EA water quality, and COSMOS-UK
+are real and proven; soil texture and land cover are deliberately not built,
+for the reasons above, not because the search was incomplete.
 
 ### Two findings that mattered more than the pass/fail list
 
