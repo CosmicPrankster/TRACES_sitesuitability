@@ -310,6 +310,47 @@ of site.
 Conservative on purpose: it can only ever make the predicted baseline *lower*
 than the true figure, never let the tool overclaim a site it has under-read.
 
+**A fetched tier can be wired all the way through and still never reach the
+screen.** `Screened.siteConcentration` (the EA Water Quality Archive reading)
+was fully plumbed through `lib/live-site.ts`, `/api/resolve`, `/api/screen`
+and the `Screened` type — and never rendered anywhere in `ReportView.tsx`.
+Tide and satellite had their own JSX blocks; EA concentration had none. Fixed
+2026-10-13 alongside the UI redesign below, now rendered as a stat chip like
+every other live tier. The lesson: when a new source lands, grep the view
+layer for it, not just the API layer — "it's in the response" is not "it's
+visible."
+
+## UI redesign (2026-10-13) — editorial/journal direction
+
+The original UI (`app/globals.css`, `app/ReportView.tsx`) was a plain
+white/blue utility layout with every live tier (character, algae/inhibition
+flags, tide, satellite turbidity) rendered as its own always-expanded
+paragraph — dense, and the kind of surface where a missing render (see the
+EA bug above) is easy to miss. Restyled per real inspiration images the user
+supplied (not the Figma file directly — the Figma MCP tool hit its Starter-
+plan rate limit mid-session and the prototype couldn't be pulled; this
+reproduces the already-logged "River journal" direction from the Notion
+design-pitches card using that inspiration instead): cream background, a
+serif display face (Newsreader) for headings, monospace (IBM Plex Mono) for
+data labels/meta, moss-green/clay/brick verdict colours instead of blue/
+green/amber/red, thin hairline borders over heavy rounded boxes.
+
+Content changes, not just paint: every live tier (including the
+now-fixed EA chip) collapsed into one compact chip row instead of five
+paragraphs, with the full sentence-level reasoning moved into a single
+`<details>` disclosure rather than deleted. The character-override selector
+collapses behind a disclosure once a site is confirmed (it's still the
+primary control when no site is confirmed). The on-site field-update
+tool (chat + form) is now a collapsed `<details>`, open by default only when
+a field reading has already been applied. Nothing was removed — only what's
+secondary moved behind a click, and what the user complained they couldn't
+see (EA data) is now on by default, not buried.
+
+If the Figma rate limit clears, it's worth a follow-up pass comparing this
+against the actual prototype file
+(`https://www.figma.com/design/FBZHLWJTsOUXxGGY44wuTb/Fellowship?node-id=100-2`)
+rather than the inspiration-image inference used here.
+
 ## Reservations — be honest about these with the user
 
 **The cut sizes are guesses, and the validation loop now shows by how much

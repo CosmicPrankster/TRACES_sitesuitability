@@ -1,21 +1,23 @@
 :root {
-  --bg: #fafaf9;
-  --surface: #ffffff;
-  --border: #e2e2df;
-  --text: #1c1c1a;
-  --text-muted: #63625c;
-  --accent: #2b6cb0;
+  --bg: #f5f1e6;
+  --surface: #fffdf8;
+  --surface-sunk: #efe9da;
+  --border: #ddd3ba;
+  --text: #24231d;
+  --text-muted: #746c57;
+  --accent: #35593f;
+  --accent-ink: #203a27;
 
-  --strong: #1c7c3f;
-  --strong-bg: #e3f5e9;
-  --promising: #3a8f52;
-  --promising-bg: #eef8f0;
-  --marginal: #a86a12;
-  --marginal-bg: #fdf3e3;
-  --unlikely: #a3312c;
-  --unlikely-bg: #fbeceb;
-  --insufficient: #6b6b66;
-  --insufficient-bg: #f0f0ee;
+  --strong: #2f6b45;
+  --strong-bg: #e7efe0;
+  --marginal: #a06423;
+  --marginal-bg: #f5ead4;
+  --unlikely: #9a3c2e;
+  --unlikely-bg: #f5e3dd;
+  --insufficient: #746c57;
+  --insufficient-bg: #ece6d6;
+
+  --font-body: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
 }
 
 * {
@@ -25,33 +27,65 @@
 body {
   margin: 0;
   background: var(--bg);
+  background-image: radial-gradient(ellipse at top right, rgba(53, 89, 63, 0.06), transparent 55%);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-  line-height: 1.5;
+  font-family: var(--font-body);
+  line-height: 1.55;
 }
 
 main {
-  max-width: 880px;
+  max-width: 900px;
   margin: 0 auto;
-  padding: 2rem 1.25rem 4rem;
+  padding: 3rem 1.25rem 4rem;
+}
+
+.mono {
+  font-family: var(--font-mono), ui-monospace, monospace;
+}
+
+.eyebrow {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.page-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.9rem;
+  margin-bottom: 2rem;
+}
+
+.ripple-mark {
+  flex: none;
+  margin-top: 0.3rem;
+  color: var(--accent);
+  opacity: 0.8;
 }
 
 .page-header h1 {
-  font-size: 1.5rem;
-  margin: 0 0 0.25rem;
+  font-family: var(--font-serif), serif;
+  font-weight: 500;
+  font-size: 1.85rem;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.35rem;
 }
 
 .disclaimer {
   color: var(--text-muted);
-  font-size: 0.9rem;
-  margin: 0 0 1.5rem;
+  font-size: 0.86rem;
+  margin: 0;
+  max-width: 54ch;
 }
 
 .input-row {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: 6px;
+  padding: 1.1rem 1.2rem;
   margin-bottom: 1rem;
   display: flex;
   flex-wrap: wrap;
@@ -60,7 +94,7 @@ main {
 }
 
 .input-row label {
-  font-size: 0.9rem;
+  font-size: 0.88rem;
   color: var(--text-muted);
 }
 
@@ -73,29 +107,48 @@ main {
 .site-input-row input {
   flex: 1;
   font-size: 0.95rem;
-  padding: 0.4rem 0.6rem;
-  border-radius: 6px;
+  font-family: var(--font-body);
+  padding: 0.5rem 0.7rem;
+  border-radius: 4px;
   border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
 }
 
-.site-input-row button {
-  font-size: 0.9rem;
-  padding: 0.4rem 0.9rem;
-  border-radius: 6px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #fff;
+.btn,
+.site-input-row button,
+.field-update-chat button,
+.field-update-actions button {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0.55rem 1.1rem;
+  border-radius: 999px;
+  border: 1px solid var(--text);
+  background: var(--text);
+  color: var(--surface);
   cursor: pointer;
+  white-space: nowrap;
 }
 
-.site-input-row button:disabled {
-  opacity: 0.6;
+.btn:disabled,
+.site-input-row button:disabled,
+.field-update-chat button:disabled,
+.field-update-actions button:disabled {
+  opacity: 0.45;
   cursor: default;
 }
 
+.field-update-actions button:nth-child(2) {
+  background: transparent;
+  color: var(--text);
+}
+
 .live-status {
-  border-radius: 8px;
-  padding: 0.9rem 1rem;
+  border-radius: 6px;
+  padding: 1rem 1.1rem;
   margin-bottom: 1rem;
   font-size: 0.92rem;
 }
@@ -121,7 +174,7 @@ main {
   background: var(--marginal-bg);
   border: 1px solid var(--marginal);
   color: var(--marginal);
-  font-size: 0.88rem;
+  font-size: 0.86rem;
 }
 
 .live-confirm {
@@ -152,7 +205,7 @@ main {
   font: inherit;
   font-weight: 600;
   padding: 0.5rem 0.75rem;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid var(--marginal);
   background: var(--surface);
   color: var(--marginal);
@@ -161,7 +214,7 @@ main {
 
 .candidate-reason {
   display: block;
-  font-size: 0.82rem;
+  font-size: 0.8rem;
   color: var(--text-muted);
   margin: 0.15rem 0 0 0.75rem;
 }
@@ -174,17 +227,153 @@ main {
 }
 
 .input-row select {
-  font-size: 0.95rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 6px;
+  font-size: 0.92rem;
+  font-family: var(--font-body);
+  padding: 0.4rem 0.55rem;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
 }
 
+/* Station headline - the one piece of always-visible prose in the live-ok card. */
+.station-line {
+  font-family: var(--font-serif), serif;
+  font-size: 1.05rem;
+  margin: 0 0 0.7rem;
+}
+
+/* Compact chip strip - character / flags / tide / satellite / EA concentration,
+   replacing what used to be five separate always-expanded paragraphs. */
+.stat-strip {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin: 0 0 0.25rem;
+}
+
+.stat-chip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.4rem 0.7rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+  min-width: 7rem;
+}
+
+.stat-chip .eyebrow {
+  color: var(--text-muted);
+}
+
+.stat-chip .stat-value {
+  font-size: 0.88rem;
+  font-weight: 600;
+}
+
+.stat-chip.stat-strong {
+  border-color: var(--strong);
+  background: var(--strong-bg);
+}
+.stat-chip.stat-strong .stat-value {
+  color: var(--strong);
+}
+
+.stat-chip.stat-marginal {
+  border-color: var(--marginal);
+  background: var(--marginal-bg);
+}
+.stat-chip.stat-marginal .stat-value {
+  color: var(--marginal);
+}
+
+.stat-chip.stat-insufficient .stat-value {
+  color: var(--insufficient);
+}
+
+details.disclosure {
+  margin-top: 0.6rem;
+}
+
+details.disclosure > summary {
+  cursor: pointer;
+  list-style: none;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+details.disclosure > summary::-webkit-details-marker {
+  display: none;
+}
+
+details.disclosure > summary::before {
+  content: "+ ";
+}
+
+details.disclosure[open] > summary::before {
+  content: "\2212 "; /* minus sign */
+}
+
+details.disclosure .disclosure-body {
+  margin-top: 0.6rem;
+  padding-top: 0.6rem;
+  border-top: 1px dashed var(--border);
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+details.disclosure .disclosure-body ul {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+details.disclosure .disclosure-body li {
+  margin-bottom: 0.25rem;
+}
+
+.field-update-section > summary {
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.78rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+  color: var(--text);
+  padding: 0.2rem 0;
+}
+
+.field-update-section > summary::-webkit-details-marker {
+  display: none;
+}
+
+.field-update-section > summary::before {
+  content: "\25B8  "; /* small right triangle */
+  color: var(--accent);
+}
+
+.field-update-section[open] > summary::before {
+  content: "\25BE  "; /* small down triangle */
+}
+
+.field-update-section .field-update-sub {
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  text-transform: none;
+  letter-spacing: normal;
+  font-weight: 400;
+  margin: 0.2rem 0 0.9rem;
+}
+
 .field-update-row {
   flex-direction: column;
   align-items: stretch;
+  padding-top: 1rem;
 }
 
 .field-update-chat {
@@ -207,8 +396,9 @@ main {
 
 .field-update-chat textarea {
   font-size: 0.9rem;
+  font-family: var(--font-body);
   padding: 0.5rem;
-  border-radius: 6px;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -217,18 +407,6 @@ main {
 
 .field-update-chat button {
   align-self: flex-start;
-  font-size: 0.9rem;
-  padding: 0.4rem 0.9rem;
-  border-radius: 6px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #fff;
-  cursor: pointer;
-}
-
-.field-update-chat button:disabled {
-  opacity: 0.6;
-  cursor: default;
 }
 
 .field-update-form {
@@ -249,8 +427,9 @@ main {
 .field-update-form input,
 .field-update-form select {
   font-size: 0.9rem;
-  padding: 0.35rem 0.5rem;
-  border-radius: 6px;
+  font-family: var(--font-body);
+  padding: 0.4rem 0.55rem;
+  border-radius: 4px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -263,35 +442,20 @@ main {
   margin-top: 0.25rem;
 }
 
-.field-update-actions button {
-  font-size: 0.9rem;
-  padding: 0.4rem 0.9rem;
-  border-radius: 6px;
-  border: 1px solid var(--accent);
-  background: var(--accent);
-  color: #fff;
-  cursor: pointer;
-}
-
-.field-update-actions button:disabled {
-  opacity: 0.6;
-  cursor: default;
-}
-
-.field-update-actions button:nth-child(2) {
-  background: var(--surface);
-  color: var(--accent);
-}
-
 .window-banner {
-  border-radius: 8px;
-  padding: 0.9rem 1rem;
-  margin-bottom: 1.5rem;
-  font-size: 0.98rem;
+  border-radius: 6px;
+  padding: 1.1rem 1.25rem;
+  margin-bottom: 1.75rem;
+  font-family: var(--font-serif), serif;
+  font-size: 1.1rem;
+}
+
+.window-banner strong {
+  font-weight: 600;
 }
 
 .window-yes {
-  background: var(--promising-bg);
+  background: var(--strong-bg);
   color: var(--strong);
   border: 1px solid var(--strong);
 }
@@ -303,12 +467,16 @@ main {
 }
 
 h2 {
-  font-size: 1.15rem;
-  margin: 1.75rem 0 0.25rem;
+  font-family: var(--font-serif), serif;
+  font-weight: 500;
+  font-size: 1.3rem;
+  margin: 2rem 0 0.3rem;
 }
 
 h3 {
-  font-size: 1rem;
+  font-family: var(--font-serif), serif;
+  font-weight: 500;
+  font-size: 1.05rem;
   margin: 1.25rem 0 0.4rem;
 }
 
@@ -330,7 +498,10 @@ table.grid td {
 }
 
 table.grid thead th {
-  font-size: 0.85rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--text-muted);
   font-weight: 500;
 }
@@ -346,8 +517,8 @@ table.grid tbody th[scope="row"] {
 .cell {
   width: 100%;
   border: 1px solid transparent;
-  border-radius: 6px;
-  padding: 0.5rem 0.4rem;
+  border-radius: 4px;
+  padding: 0.55rem 0.4rem;
   cursor: pointer;
   display: flex;
   flex-direction: column;
@@ -356,8 +527,11 @@ table.grid tbody th[scope="row"] {
 }
 
 .cell-verdict {
-  font-size: 0.78rem;
-  font-weight: 600;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
 }
 
 .cell-ratio {
@@ -367,11 +541,6 @@ table.grid tbody th[scope="row"] {
 .cell-strong {
   background: var(--strong-bg);
   color: var(--strong);
-}
-
-.cell-promising {
-  background: var(--promising-bg);
-  color: var(--promising);
 }
 
 .cell-marginal {
@@ -393,47 +562,11 @@ table.grid tbody th[scope="row"] {
   border-color: currentColor;
 }
 
-.flags-row {
-  margin-top: 0.5rem;
-}
-
-.flags-row p {
-  margin: 0.35rem 0;
-}
-
-.flags-row .hint {
-  display: inline;
-  margin: 0;
-}
-
-.flag-pill {
-  display: inline-block;
-  border-radius: 999px;
-  padding: 0.1rem 0.6rem;
-  font-size: 0.78rem;
-  font-weight: 600;
-}
-
-.flag-strong {
-  background: var(--strong-bg);
-  color: var(--strong);
-}
-
-.flag-marginal {
-  background: var(--marginal-bg);
-  color: var(--marginal);
-}
-
-.flag-insufficient {
-  background: var(--insufficient-bg);
-  color: var(--insufficient);
-}
-
 .cell-detail {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1rem;
+  border-radius: 6px;
+  padding: 1rem 1.1rem;
   margin-top: 1rem;
 }
 
@@ -445,9 +578,12 @@ table.grid tbody th[scope="row"] {
   margin-top: 1.5rem;
   background: none;
   border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.5rem 0.9rem;
-  font: inherit;
+  border-radius: 999px;
+  padding: 0.5rem 1rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.74rem;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
   color: var(--accent);
   cursor: pointer;
 }
@@ -455,8 +591,8 @@ table.grid tbody th[scope="row"] {
 .full-report {
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 1.25rem;
+  border-radius: 6px;
+  padding: 1.25rem 1.4rem;
   margin-top: 1rem;
 }
 
@@ -489,5 +625,7 @@ table.config-list td {
   padding-top: 1rem;
   border-top: 1px solid var(--border);
   color: var(--text-muted);
-  font-size: 0.8rem;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.72rem;
+  letter-spacing: 0.02em;
 }

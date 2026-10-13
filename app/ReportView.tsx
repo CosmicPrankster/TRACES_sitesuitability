@@ -102,10 +102,21 @@ const CATEGORY_STYLE: Record<Category | "insufficient-data", { label: string; cl
 };
 
 const FLAG_RISK_STYLE: Record<SiteFlags["algae"]["risk"], { label: string; className: string }> = {
-  elevated: { label: "Elevated", className: "flag-marginal" },
-  low: { label: "Low", className: "flag-strong" },
-  "insufficient-data": { label: "No data", className: "flag-insufficient" },
+  elevated: { label: "Elevated", className: "stat-marginal" },
+  low: { label: "Low", className: "stat-strong" },
+  "insufficient-data": { label: "No data", className: "stat-insufficient" },
 };
+
+/** Small concentric-ripple mark, used once by the header - the site's only decorative flourish. */
+function RippleMark() {
+  return (
+    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true" className="ripple-mark">
+      <circle cx="15" cy="15" r="3" stroke="currentColor" strokeWidth="1.2" />
+      <circle cx="15" cy="15" r="8" stroke="currentColor" strokeWidth="1" opacity="0.6" />
+      <circle cx="15" cy="15" r="13" stroke="currentColor" strokeWidth="0.8" opacity="0.35" />
+    </svg>
+  );
+}
 
 const RECOMMENDATION_LABEL: Record<string, string> = {
   "filter-alone": "Filter alone",
@@ -354,11 +365,14 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
   return (
     <main>
       <header className="page-header">
-        <h1>Hydrocyclone + membrane screening</h1>
-        <p className="disclaimer">
-          Preliminary engineering screening only - not process design, equipment selection, or a
-          guarantee of membrane performance.
-        </p>
+        <RippleMark />
+        <div>
+          <h1>Hydrocyclone + membrane screening</h1>
+          <p className="disclaimer">
+            Preliminary engineering screening only - not process design, equipment selection, or a
+            guarantee of membrane performance.
+          </p>
+        </div>
       </header>
 
       <section className="input-row">
@@ -451,85 +465,121 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
       {live && (
         <section className="live-status live-ok">
           {live.station && (
-            <p>
-              <strong>Screening:</strong> {live.station.name} - NRFA gauging station {live.station.id}
-              {live.station["catchment-area"] ? `, catchment area ${live.station["catchment-area"]} km²` : ""}.
+            <p className="station-line">
+              {live.station.name} <span className="mono">· NRFA {live.station.id}</span>
+              {live.station["catchment-area"] ? ` · ${live.station["catchment-area"]} km² catchment` : ""}
             </p>
           )}
-          <p>
-            <strong>Inferred character:</strong> {CHARACTER_LABELS[live.characterInference.character]}{" "}
-            (confidence: {live.characterInference.confidence})
-          </p>
-          <ul>
-            {live.characterInference.reasoning.map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
-          <div className="flags-row">
-            <p>
-              <strong>Algae risk:</strong>{" "}
-              <span className={`flag-pill ${FLAG_RISK_STYLE[live.flags.algae.risk].className}`}>
-                {FLAG_RISK_STYLE[live.flags.algae.risk].label}
-              </span>{" "}
-              <span className="hint">{live.flags.algae.reasoning}</span>
-            </p>
-            <p>
-              <strong>Organic/inhibition risk:</strong>{" "}
-              <span className={`flag-pill ${FLAG_RISK_STYLE[live.flags.inhibition.risk].className}`}>
-                {FLAG_RISK_STYLE[live.flags.inhibition.risk].label}
-              </span>{" "}
-              <span className="hint">{live.flags.inhibition.reasoning}</span>
-            </p>
+
+          <div className="stat-strip">
+            <div className="stat-chip">
+              <span className="eyebrow">Character</span>
+              <span className="stat-value">
+                {CHARACTER_LABELS[live.characterInference.character]} ({live.characterInference.confidence})
+              </span>
+            </div>
+            <div className={`stat-chip ${FLAG_RISK_STYLE[live.flags.algae.risk].className}`}>
+              <span className="eyebrow">Algae risk</span>
+              <span className="stat-value">{FLAG_RISK_STYLE[live.flags.algae.risk].label}</span>
+            </div>
+            <div className={`stat-chip ${FLAG_RISK_STYLE[live.flags.inhibition.risk].className}`}>
+              <span className="eyebrow">Inhibition risk</span>
+              <span className="stat-value">{FLAG_RISK_STYLE[live.flags.inhibition.risk].label}</span>
+            </div>
+            {live.siteConcentration && (
+              <div className="stat-chip">
+                <span className="eyebrow">EA water quality</span>
+                <span className="stat-value">{live.siteConcentration.mgL.toFixed(1)} mg/L</span>
+              </div>
+            )}
             {live.tideState && (
-              <p>
-                <strong>Tide state:</strong> {live.tideState.station.name} tide station,{" "}
-                {live.tideState.station.distanceKm.toFixed(1)} km away - {live.tideState.phase}, {live.tideState.springNeap}.{" "}
-                <span className="hint">{live.tideState.reasoning}</span>
-              </p>
+              <div className="stat-chip">
+                <span className="eyebrow">Tide state</span>
+                <span className="stat-value">
+                  {live.tideState.phase}, {live.tideState.springNeap}
+                </span>
+              </div>
             )}
             {live.satelliteTurbidity && (
-              <p>
-                <strong>Satellite turbidity (context only, not scored):</strong> NDTI mean{" "}
-                {live.satelliteTurbidity.ndtiMean.toFixed(3)} ({live.satelliteTurbidity.sampleCount} of{" "}
-                {live.satelliteTurbidity.sampleCount + live.satelliteTurbidity.noDataCount} pixels cloud-free).{" "}
-                <span className="hint">{live.satelliteTurbidity.reasoning}</span>
-              </p>
+              <div className="stat-chip">
+                <span className="eyebrow">Satellite turbidity</span>
+                <span className="stat-value">NDTI {live.satelliteTurbidity.ndtiMean.toFixed(3)}</span>
+              </div>
             )}
           </div>
+
+          <details className="disclosure">
+            <summary>Reasoning behind these readings</summary>
+            <div className="disclosure-body">
+              <ul>
+                {live.characterInference.reasoning.map((line, i) => (
+                  <li key={`char-${i}`}>{line}</li>
+                ))}
+                <li>Algae risk: {live.flags.algae.reasoning}</li>
+                <li>Inhibition risk: {live.flags.inhibition.reasoning}</li>
+                {live.siteConcentration && <li>EA water quality: {live.siteConcentration.source}</li>}
+                {live.tideState && (
+                  <li>
+                    Tide: {live.tideState.station.name} tide station, {live.tideState.station.distanceKm.toFixed(1)} km
+                    away. {live.tideState.reasoning}
+                  </li>
+                )}
+                {live.satelliteTurbidity && (
+                  <li>
+                    Satellite turbidity (context only, not scored): {live.satelliteTurbidity.sampleCount} of{" "}
+                    {live.satelliteTurbidity.sampleCount + live.satelliteTurbidity.noDataCount} pixels cloud-free.{" "}
+                    {live.satelliteTurbidity.reasoning}
+                  </li>
+                )}
+              </ul>
+            </div>
+          </details>
         </section>
       )}
 
-      <section className="input-row">
-        <label htmlFor="character-select">
-          {live ? (
-            <>Or override with an assumed solids character instead of the resolved site:</>
-          ) : (
-            <>No site confirmed yet - screen against an assumed solids character:</>
-          )}
-        </label>
-        <select
-          id="character-select"
-          value={character}
-          onChange={(e) => {
-            setCharacter(e.target.value as ParticleCharacter);
-            setSelected(null);
-            setFlow({ phase: "idle" });
-          }}
-        >
-          {(Object.keys(CHARACTER_LABELS) as ParticleCharacter[]).map((c) => (
-            <option key={c} value={c}>
-              {CHARACTER_LABELS[c]}
-            </option>
-          ))}
-        </select>
-      </section>
+      {(() => {
+        const selectEl = (
+          <select
+            id="character-select"
+            value={character}
+            onChange={(e) => {
+              setCharacter(e.target.value as ParticleCharacter);
+              setSelected(null);
+              setFlow({ phase: "idle" });
+            }}
+          >
+            {(Object.keys(CHARACTER_LABELS) as ParticleCharacter[]).map((c) => (
+              <option key={c} value={c}>
+                {CHARACTER_LABELS[c]}
+              </option>
+            ))}
+          </select>
+        );
+        if (live) {
+          return (
+            <details className="disclosure" style={{ marginBottom: "1rem" }}>
+              <summary>Override with an assumed solids character instead</summary>
+              <div className="disclosure-body">
+                <label htmlFor="character-select">Assumed solids character</label>
+                <div style={{ marginTop: "0.4rem" }}>{selectEl}</div>
+              </div>
+            </details>
+          );
+        }
+        return (
+          <section className="input-row">
+            <label htmlFor="character-select">No site confirmed yet - screen against an assumed solids character:</label>
+            {selectEl}
+          </section>
+        );
+      })()}
 
-      <section className="input-row field-update-row">
-        <label>
-          <strong>On-site field update</strong> - standing at the site right now? A real field
-          reading replaces the desk-based guess for this report, deterministically, no site visit
-          needed to rebuild anything.
-        </label>
+      <details className="field-update-section" open={Boolean(fieldResult)}>
+        <summary>On-site field update</summary>
+        <p className="field-update-sub">
+          Standing at the site right now? A real field reading replaces the desk-based guess for
+          this report, deterministically - no site visit needed to rebuild anything.
+        </p>
         <div className="field-update-chat">
           <label htmlFor="field-chat">
             Or describe what you saw, in your own words
@@ -644,7 +694,7 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
             )}
           </div>
         )}
-      </section>
+      </details>
 
       <section className={`window-banner ${report.usefulWindow ? "window-yes" : "window-no"}`}>
         {report.usefulWindow ? (
