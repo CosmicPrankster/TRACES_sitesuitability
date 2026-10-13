@@ -8,12 +8,6 @@ import type { Category, MembraneAssessment, UpliftResult } from "@/lib/assessmen
 import type { ScreeningReport } from "@/lib/report";
 import type { SiteFlags } from "@/lib/flags";
 
-export interface CharacterData {
-  psd: Psd;
-  assessments: MembraneAssessment[];
-  report: ScreeningReport;
-}
-
 interface HydrocycloneRef {
   id: string;
   name: string;
@@ -28,7 +22,6 @@ interface MembraneRef {
 interface Props {
   hydrocyclones: HydrocycloneRef[];
   membranes: MembraneRef[];
-  byCharacter: Record<ParticleCharacter, CharacterData>;
 }
 
 interface Screened {
@@ -107,17 +100,6 @@ const FLAG_RISK_STYLE: Record<SiteFlags["algae"]["risk"], { label: string; class
   "insufficient-data": { label: "No data", className: "stat-insufficient" },
 };
 
-/** Small concentric-ripple mark, used once by the header - the site's only decorative flourish. */
-function RippleMark() {
-  return (
-    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" aria-hidden="true" className="ripple-mark">
-      <circle cx="15" cy="15" r="3" stroke="currentColor" strokeWidth="1.2" />
-      <circle cx="15" cy="15" r="8" stroke="currentColor" strokeWidth="1" opacity="0.6" />
-      <circle cx="15" cy="15" r="13" stroke="currentColor" strokeWidth="0.8" opacity="0.35" />
-    </svg>
-  );
-}
-
 const RECOMMENDATION_LABEL: Record<string, string> = {
   "filter-alone": "Filter alone",
   "more-replicates": "Run more replicates",
@@ -156,10 +138,9 @@ type FieldUpdateState =
   | { phase: "no-evidence"; message: string }
   | { phase: "failed"; message: string };
 
-export default function ReportView({ hydrocyclones, membranes, byCharacter }: Props) {
+export default function ReportView({ hydrocyclones, membranes }: Props) {
   const [query, setQuery] = useState("");
   const [flow, setFlow] = useState<FlowState>({ phase: "idle" });
-  const [character, setCharacter] = useState<ParticleCharacter>("sand");
   const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<SelectedDetail | null>(null);
 
@@ -174,7 +155,8 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
 
   const live = flow.phase === "screened" ? flow : null;
   const fieldResult = fieldUpdate.phase === "done" ? fieldUpdate.result : null;
-  const { assessments, report } = fieldResult ?? live ?? byCharacter[character];
+  /** The report currently on screen - a field reading if one was applied, otherwise the live screening. Null until a site is confirmed; there is no assumed-character fallback. */
+  const current = live ? (fieldResult ?? live) : null;
 
   async function submitFieldUpdate() {
     setFieldUpdate({ phase: "submitting" });
@@ -261,8 +243,8 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
     setChatIntake(null);
   }
 
-  const assessmentFor = (membraneId: string) => assessments.find((a) => a.membraneId === membraneId)!;
-  const selectedAssessment = selected ? assessmentFor(selected.membraneId) : null;
+  const assessmentFor = (membraneId: string) => current!.assessments.find((a) => a.membraneId === membraneId)!;
+  const selectedAssessment = selected && current ? assessmentFor(selected.membraneId) : null;
   const selectedUplift: UpliftResult | null =
     selected?.methodId && selectedAssessment
       ? selectedAssessment.uplifts.find((u) => u.methodId === selected.methodId) ?? null
@@ -365,22 +347,14 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
   return (
     <main>
       <header className="page-header">
-        <RippleMark />
-        <div>
-          <h1>Hydrocyclone + membrane screening</h1>
-          <p className="disclaimer">
-            Preliminary engineering screening only - not process design, equipment selection, or a
-            guarantee of membrane performance.
-          </p>
-        </div>
+        <h1>Site Suitability Tool</h1>
       </header>
 
       <section className="input-row">
         <label htmlFor="site-input">
           <strong>Site input</strong> - e.g. &quot;Tilford, River Wey&quot;, or exact coordinates
-          (&quot;51.154565, -0.791587&quot;) when a name is hard to match, such as a pond or a
-          small watercourse. Resolves live via Nominatim + NRFA. You confirm the match before
-          anything is screened.
+          (&quot;51.154565, -0.791587&quot;). Confirm the match before anything is screened, or
+          choose to sample at your given coordinates.
         </label>
         <div className="site-input-row">
           <input
@@ -537,325 +511,304 @@ export default function ReportView({ hydrocyclones, membranes, byCharacter }: Pr
         </section>
       )}
 
-      {(() => {
-        const selectEl = (
-          <select
-            id="character-select"
-            value={character}
-            onChange={(e) => {
-              setCharacter(e.target.value as ParticleCharacter);
-              setSelected(null);
-              setFlow({ phase: "idle" });
-            }}
-          >
-            {(Object.keys(CHARACTER_LABELS) as ParticleCharacter[]).map((c) => (
-              <option key={c} value={c}>
-                {CHARACTER_LABELS[c]}
-              </option>
-            ))}
-          </select>
-        );
-        if (live) {
-          return (
-            <details className="disclosure" style={{ marginBottom: "1rem" }}>
-              <summary>Override with an assumed solids character instead</summary>
-              <div className="disclosure-body">
-                <label htmlFor="character-select">Assumed solids character</label>
-                <div style={{ marginTop: "0.4rem" }}>{selectEl}</div>
-              </div>
-            </details>
-          );
-        }
-        return (
-          <section className="input-row">
-            <label htmlFor="character-select">No site confirmed yet - screen against an assumed solids character:</label>
-            {selectEl}
-          </section>
-        );
-      })()}
-
-      <details className="field-update-section" open={Boolean(fieldResult)}>
-        <summary>On-site field update</summary>
-        <p className="field-update-sub">
-          Standing at the site right now? A real field reading replaces the desk-based guess for
-          this report, deterministically - no site visit needed to rebuild anything.
-        </p>
-        <div className="field-update-chat">
-          <label htmlFor="field-chat">
-            Or describe what you saw, in your own words
-            <textarea
-              id="field-chat"
-              value={chatMessage}
-              onChange={(e) => setChatMessage(e.target.value)}
-              placeholder={'e.g. "looks like fine sand, cleared within 10 minutes"'}
-              rows={2}
-            />
-          </label>
-          <button type="button" onClick={submitChatMessage} disabled={!chatMessage.trim() || fieldUpdate.phase === "submitting"}>
-            {fieldUpdate.phase === "submitting" ? "Parsing..." : "Parse & apply"}
-          </button>
-          <p className="hint">
-            Parsed into the same fields as the form below, never scored directly - AI (here, a
-            deterministic parser) only ever reads words into structured fields; see HANDOFF.md.
+      {!live && (
+        <section className="input-row homepage-placeholder">
+          <p>
+            This tool screens a UK river, stream or other waterbody site for hydrocyclone
+            pre-treatment and membrane filtration suitability - combining live geology,
+            water-quality, tide and satellite readings for the site you enter with real site trial
+            data where it exists. Enter a site above to get started.
           </p>
-          {chatIntake && (
-            <div className="hint">
-              {chatIntake.parsedFrom.map((line, i) => (
-                <p key={`parsed-${i}`}>Understood: {line}</p>
-              ))}
-              {chatIntake.warnings.map((line, i) => (
-                <p key={`warn-${i}`}>Not understood: {line}</p>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="field-update-form">
-          <label htmlFor="grain-card">
-            Grain card match
-            <select id="grain-card" value={grainCardClass} onChange={(e) => setGrainCardClass(e.target.value)}>
-              {GRAIN_CARD_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>
-                  {o.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label htmlFor="settle-cleared">
-            Settle test - cleared within (minutes)
-            <input
-              id="settle-cleared"
-              type="number"
-              min="0"
-              value={settleCleared}
-              onChange={(e) => setSettleCleared(e.target.value)}
-              placeholder="e.g. 5"
-            />
-          </label>
-          <label htmlFor="settle-hazy">
-            ...or still hazy after (hours)
-            <input
-              id="settle-hazy"
-              type="number"
-              min="0"
-              value={settleHazyHours}
-              onChange={(e) => setSettleHazyHours(e.target.value)}
-              placeholder="e.g. 6"
-            />
-          </label>
-          <label htmlFor="turbidity-tube">
-            Turbidity tube reading (cm)
-            <input
-              id="turbidity-tube"
-              type="number"
-              min="0"
-              value={turbidityTube}
-              onChange={(e) => setTurbidityTube(e.target.value)}
-              placeholder="context only - not scored"
-            />
-          </label>
-          <label htmlFor="site-note">
-            Site note
-            <input id="site-note" type="text" value={siteNote} onChange={(e) => setSiteNote(e.target.value)} placeholder="anything else worth recording" />
-          </label>
-          <div className="field-update-actions">
-            <button type="button" onClick={submitFieldUpdate} disabled={!grainCardClass || fieldUpdate.phase === "submitting"}>
-              {fieldUpdate.phase === "submitting" ? "Recomputing..." : "Apply field reading"}
-            </button>
-            {fieldResult && (
-              <button type="button" onClick={clearFieldUpdate}>
-                Clear field reading, use the desk estimate again
-              </button>
-            )}
-          </div>
-        </div>
-        {fieldUpdate.phase === "no-evidence" && <p className="hint">{fieldUpdate.message}</p>}
-        {fieldUpdate.phase === "failed" && <p className="hint">{fieldUpdate.message}</p>}
-        {fieldResult && (
-          <div className="live-status live-ok">
-            <p>
-              <strong>Field reading applied:</strong> {fieldResult.psd.label} (status: {fieldResult.psd.status})
-            </p>
-            <ul>
-              {fieldResult.fieldReasoning.map((line, i) => (
-                <li key={i}>{line}</li>
-              ))}
-            </ul>
-            {fieldResult.additionalContext.length > 0 && (
+          <p className="hint">More about the method will go here.</p>
+        </section>
+      )}
+
+      {current && (
+        <>
+          <section className={`window-banner ${current.report.usefulWindow ? "window-yes" : "window-no"}`}>
+            {current.report.usefulWindow ? (
               <>
-                <p className="hint">Additional context (not scored):</p>
-                <ul>
-                  {fieldResult.additionalContext.map((line, i) => (
-                    <li key={i} className="hint">
-                      {line}
-                    </li>
-                  ))}
-                </ul>
+                <strong>Worth investigating:</strong> membrane ratings from{" "}
+                {current.report.usefulWindow.fromPoreSizeUm} to {current.report.usefulWindow.toPoreSizeUm} µm.
+              </>
+            ) : (
+              <>
+                <strong>Not worth investigating yet</strong> at any membrane rating tested for this
+                solids character.
               </>
             )}
-          </div>
-        )}
-      </details>
+          </section>
 
-      <section className={`window-banner ${report.usefulWindow ? "window-yes" : "window-no"}`}>
-        {report.usefulWindow ? (
-          <>
-            <strong>Worth investigating:</strong> membrane ratings from{" "}
-            {report.usefulWindow.fromPoreSizeUm} to {report.usefulWindow.toPoreSizeUm} µm.
-          </>
-        ) : (
-          <>
-            <strong>Not worth investigating yet</strong> at any membrane rating tested for this
-            solids character.
-          </>
-        )}
-      </section>
-
-      <section>
-        <h2>Per membrane: baseline, uplift, recommendation</h2>
-        <p className="hint">Click a volume or uplift cell for the full reasoning behind it.</p>
-        <table className="grid">
-          <thead>
-            <tr>
-              <th scope="col">Membrane</th>
-              <th scope="col">Baseline volume (filter alone)</th>
-              {hydrocyclones.map((h) => (
-                <th scope="col" key={h.id}>
-                  {h.name} uplift
-                </th>
-              ))}
-              <th scope="col">Recommendation</th>
-            </tr>
-          </thead>
-          <tbody>
-            {membranes.map((m) => {
-              const a = assessmentFor(m.id);
-              const baselineSelected = selected?.membraneId === m.id && !selected.methodId;
-              return (
-                <tr key={m.id}>
-                  <th scope="row">{m.label}</th>
-                  <td>
-                    <button
-                      type="button"
-                      className={`cell ${a.baselineVolume ? (a.baselineSource === "estimated" ? "cell-marginal" : "cell-strong") : "cell-insufficient"} ${baselineSelected ? "cell-selected" : ""}`}
-                      onClick={() => setSelected(baselineSelected ? null : { membraneId: m.id })}
-                    >
-                      {a.baselineVolume ? (
-                        <>
-                          <span className="cell-verdict">
-                            {a.baselineVolume.lowMl.toFixed(0)}-{a.baselineVolume.highMl.toFixed(0)} mL
-                          </span>
-                          <span className="cell-ratio">
-                            {a.baselineConfidence}
-                            {a.baselineSource === "estimated" ? " (estimated)" : ""}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="cell-verdict">No data</span>
-                      )}
-                    </button>
-                  </td>
-                  {hydrocyclones.map((h) => {
-                    const u = a.uplifts.find((x) => x.methodId === h.id)!;
-                    const style = CATEGORY_STYLE[u.category];
-                    const isSelected = selected?.membraneId === m.id && selected?.methodId === h.id;
-                    return (
-                      <td key={h.id}>
+          <section>
+            <h2>Per membrane: baseline, uplift, recommendation</h2>
+            <p className="hint">Click a volume or uplift cell for the full reasoning behind it.</p>
+            <table className="grid">
+              <thead>
+                <tr>
+                  <th scope="col">Membrane</th>
+                  <th scope="col">Baseline volume (filter alone)</th>
+                  {hydrocyclones.map((h) => (
+                    <th scope="col" key={h.id}>
+                      {h.name} uplift
+                    </th>
+                  ))}
+                  <th scope="col">Recommendation</th>
+                </tr>
+              </thead>
+              <tbody>
+                {membranes.map((m) => {
+                  const a = assessmentFor(m.id);
+                  const baselineSelected = selected?.membraneId === m.id && !selected.methodId;
+                  return (
+                    <tr key={m.id}>
+                      <th scope="row">{m.label}</th>
+                      <td>
                         <button
                           type="button"
-                          className={`cell ${style.className} ${isSelected ? "cell-selected" : ""}`}
-                          onClick={() => setSelected(isSelected ? null : { membraneId: m.id, methodId: h.id })}
+                          className={`cell ${a.baselineVolume ? "cell-strong" : "cell-insufficient"} ${baselineSelected ? "cell-selected" : ""}`}
+                          onClick={() => setSelected(baselineSelected ? null : { membraneId: m.id })}
                         >
-                          <span className="cell-verdict">{style.label}</span>
-                          <span className="cell-ratio">
-                            {Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}
-                          </span>
+                          {a.baselineVolume ? (
+                            <>
+                              <span className="cell-verdict">
+                                {a.baselineVolume.lowMl.toFixed(0)}-{a.baselineVolume.highMl.toFixed(0)} mL
+                              </span>
+                              <span className="cell-ratio">
+                                {a.baselineConfidence}
+                                {a.baselineSource === "estimated" ? " (estimated)" : ""}
+                              </span>
+                            </>
+                          ) : (
+                            <span className="cell-verdict">No data</span>
+                          )}
                         </button>
                       </td>
-                    );
-                  })}
-                  <td>{RECOMMENDATION_LABEL[a.recommendation.kind]}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </section>
+                      {hydrocyclones.map((h) => {
+                        const u = a.uplifts.find((x) => x.methodId === h.id)!;
+                        const style = CATEGORY_STYLE[u.category];
+                        const isSelected = selected?.membraneId === m.id && selected?.methodId === h.id;
+                        return (
+                          <td key={h.id}>
+                            <button
+                              type="button"
+                              className={`cell ${style.className} ${isSelected ? "cell-selected" : ""}`}
+                              onClick={() => setSelected(isSelected ? null : { membraneId: m.id, methodId: h.id })}
+                            >
+                              <span className="cell-verdict">{style.label}</span>
+                              <span className="cell-ratio">
+                                {Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}
+                              </span>
+                            </button>
+                          </td>
+                        );
+                      })}
+                      <td>{RECOMMENDATION_LABEL[a.recommendation.kind]}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </section>
 
-      {selectedUplift && (
-        <section className="cell-detail">
-          <h3>
-            {membranes.find((m) => m.id === selected?.membraneId)?.label} +{" "}
-            {hydrocyclones.find((h) => h.id === selected?.methodId)?.name}
-          </h3>
-          <p>{selectedUplift.reasoning}</p>
-        </section>
-      )}
-      {!selectedUplift && selectedAssessment && selected && !selected.methodId && (
-        <section className="cell-detail">
-          <h3>{membranes.find((m) => m.id === selected.membraneId)?.label} - baseline</h3>
-          <p>{selectedAssessment.baselineReasoning}</p>
-        </section>
-      )}
-
-      <section>
-        <button type="button" className="expand-toggle" onClick={() => setExpanded(!expanded)}>
-          {expanded ? "Hide full report ▲" : "Show full report ▼"}
-        </button>
-      </section>
-
-      {expanded && (
-        <section className="full-report">
-          <h2>Full report</h2>
-
-          <h3>Verdict</h3>
-          <p>{report.verdict}</p>
-
-          <h3>Why</h3>
-          <p>{report.why}</p>
-
-          <h3>What we know</h3>
-          <ul>
-            {report.whatWeKnow.map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
-
-          <h3>What we don&apos;t know</h3>
-          <ul>
-            {report.whatWeDontKnow.map((line, i) => (
-              <li key={i}>{line}</li>
-            ))}
-          </ul>
-
-          <h3>Recommended test</h3>
-          <p>{report.recommendedTest}</p>
-
-          <h3>Every configuration tested</h3>
-          <table className="config-list">
-            <thead>
-              <tr>
-                <th>Membrane</th>
-                <th>Method</th>
-                <th>Category</th>
-                <th>Uplift</th>
-                <th>Confidence</th>
-              </tr>
-            </thead>
-            <tbody>
-              {assessments.flatMap((a) =>
-                a.uplifts.map((u, i) => (
-                  <tr key={`${a.membraneId}-${u.methodId}-${i}`}>
-                    <td>{membranes.find((m) => m.id === a.membraneId)?.label}</td>
-                    <td>{u.methodLabel}</td>
-                    <td>{CATEGORY_STYLE[u.category].label}</td>
-                    <td>{Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}</td>
-                    <td>{u.confidence}</td>
-                  </tr>
-                )),
+          <details className="field-update-section" open={Boolean(fieldResult)}>
+            <summary>On-site field update</summary>
+            <p className="field-update-sub">
+              Standing at the site right now? A real field reading replaces the desk-based guess
+              for this report, deterministically - no site visit needed to rebuild anything.
+            </p>
+            <div className="field-update-chat">
+              <label htmlFor="field-chat">
+                Or describe what you saw, in your own words
+                <textarea
+                  id="field-chat"
+                  value={chatMessage}
+                  onChange={(e) => setChatMessage(e.target.value)}
+                  placeholder={'e.g. "looks like fine sand, cleared within 10 minutes"'}
+                  rows={2}
+                />
+              </label>
+              <button type="button" onClick={submitChatMessage} disabled={!chatMessage.trim() || fieldUpdate.phase === "submitting"}>
+                {fieldUpdate.phase === "submitting" ? "Parsing..." : "Parse & apply"}
+              </button>
+              <p className="hint">
+                Parsed into the same fields as the form below, never scored directly - AI (here, a
+                deterministic parser) only ever reads words into structured fields; see HANDOFF.md.
+              </p>
+              {chatIntake && (
+                <div className="hint">
+                  {chatIntake.parsedFrom.map((line, i) => (
+                    <p key={`parsed-${i}`}>Understood: {line}</p>
+                  ))}
+                  {chatIntake.warnings.map((line, i) => (
+                    <p key={`warn-${i}`}>Not understood: {line}</p>
+                  ))}
+                </div>
               )}
-            </tbody>
-          </table>
-        </section>
+            </div>
+            <div className="field-update-form">
+              <label htmlFor="grain-card">
+                Grain card match
+                <select id="grain-card" value={grainCardClass} onChange={(e) => setGrainCardClass(e.target.value)}>
+                  {GRAIN_CARD_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <label htmlFor="settle-cleared">
+                Settle test - cleared within (minutes)
+                <input
+                  id="settle-cleared"
+                  type="number"
+                  min="0"
+                  value={settleCleared}
+                  onChange={(e) => setSettleCleared(e.target.value)}
+                  placeholder="e.g. 5"
+                />
+              </label>
+              <label htmlFor="settle-hazy">
+                ...or still hazy after (hours)
+                <input
+                  id="settle-hazy"
+                  type="number"
+                  min="0"
+                  value={settleHazyHours}
+                  onChange={(e) => setSettleHazyHours(e.target.value)}
+                  placeholder="e.g. 6"
+                />
+              </label>
+              <label htmlFor="turbidity-tube">
+                Turbidity tube reading (cm)
+                <input
+                  id="turbidity-tube"
+                  type="number"
+                  min="0"
+                  value={turbidityTube}
+                  onChange={(e) => setTurbidityTube(e.target.value)}
+                  placeholder="context only - not scored"
+                />
+              </label>
+              <label htmlFor="site-note">
+                Site note
+                <input id="site-note" type="text" value={siteNote} onChange={(e) => setSiteNote(e.target.value)} placeholder="anything else worth recording" />
+              </label>
+              <div className="field-update-actions">
+                <button type="button" onClick={submitFieldUpdate} disabled={!grainCardClass || fieldUpdate.phase === "submitting"}>
+                  {fieldUpdate.phase === "submitting" ? "Recomputing..." : "Apply field reading"}
+                </button>
+                {fieldResult && (
+                  <button type="button" onClick={clearFieldUpdate}>
+                    Clear field reading, use the desk estimate again
+                  </button>
+                )}
+              </div>
+            </div>
+            {fieldUpdate.phase === "no-evidence" && <p className="hint">{fieldUpdate.message}</p>}
+            {fieldUpdate.phase === "failed" && <p className="hint">{fieldUpdate.message}</p>}
+            {fieldResult && (
+              <div className="live-status live-ok">
+                <p>
+                  <strong>Field reading applied:</strong> {fieldResult.psd.label} (status: {fieldResult.psd.status})
+                </p>
+                <ul>
+                  {fieldResult.fieldReasoning.map((line, i) => (
+                    <li key={i}>{line}</li>
+                  ))}
+                </ul>
+                {fieldResult.additionalContext.length > 0 && (
+                  <>
+                    <p className="hint">Additional context (not scored):</p>
+                    <ul>
+                      {fieldResult.additionalContext.map((line, i) => (
+                        <li key={i} className="hint">
+                          {line}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            )}
+          </details>
+
+          {selectedUplift && (
+            <section className="cell-detail">
+              <h3>
+                {membranes.find((m) => m.id === selected?.membraneId)?.label} +{" "}
+                {hydrocyclones.find((h) => h.id === selected?.methodId)?.name}
+              </h3>
+              <p>{selectedUplift.reasoning}</p>
+            </section>
+          )}
+          {!selectedUplift && selectedAssessment && selected && !selected.methodId && (
+            <section className="cell-detail">
+              <h3>{membranes.find((m) => m.id === selected.membraneId)?.label} - baseline</h3>
+              <p>{selectedAssessment.baselineReasoning}</p>
+            </section>
+          )}
+
+          <section>
+            <button type="button" className="expand-toggle" onClick={() => setExpanded(!expanded)}>
+              {expanded ? "Hide full report ▲" : "Show full report ▼"}
+            </button>
+          </section>
+
+          {expanded && (
+            <section className="full-report">
+              <h2>Full report</h2>
+
+              <h3>Verdict</h3>
+              <p>{current.report.verdict}</p>
+
+              <h3>Why</h3>
+              <p>{current.report.why}</p>
+
+              <h3>What we know</h3>
+              <ul>
+                {current.report.whatWeKnow.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+
+              <h3>What we don&apos;t know</h3>
+              <ul>
+                {current.report.whatWeDontKnow.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+
+              <h3>Recommended test</h3>
+              <p>{current.report.recommendedTest}</p>
+
+              <h3>Every configuration tested</h3>
+              <table className="config-list">
+                <thead>
+                  <tr>
+                    <th>Membrane</th>
+                    <th>Method</th>
+                    <th>Category</th>
+                    <th>Uplift</th>
+                    <th>Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {current.assessments.flatMap((a) =>
+                    a.uplifts.map((u, i) => (
+                      <tr key={`${a.membraneId}-${u.methodId}-${i}`}>
+                        <td>{membranes.find((m) => m.id === a.membraneId)?.label}</td>
+                        <td>{u.methodLabel}</td>
+                        <td>{CATEGORY_STYLE[u.category].label}</td>
+                        <td>{Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}</td>
+                        <td>{u.confidence}</td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
+            </section>
+          )}
+        </>
       )}
 
       <footer className="page-footer">
