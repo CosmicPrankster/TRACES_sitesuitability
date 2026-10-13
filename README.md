@@ -16,7 +16,7 @@ how things were probed and built, not a living status doc.
 
 ```bash
 npm install
-npm test                       # 362 tests, no network needed
+npm test                       # 366 tests, no network needed
 npm run dev                    # the web app, http://localhost:3000
 npm run build-query-log        # regenerate data/query-log.json's bench-validation entries
 node --env-file=.env.local scripts/probe-new-sources.mjs   # needs internet + optional API keys
@@ -169,7 +169,7 @@ scripts/
   build-query-log.ts           regenerate data/query-log.json's bench-validation entries (npx tsx scripts/build-query-log.ts)
   lib/bng.mjs                  British National Grid ↔ WGS84, both directions
 
-tests/            one file per lib/ module, 362 tests total, no network
+tests/            one file per lib/ module, 366 tests total, no network
 ```
 
 ## Running it

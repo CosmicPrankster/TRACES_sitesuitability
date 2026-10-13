@@ -164,6 +164,46 @@ describe("the Kings Pond false match (real bug: 'pond' was not a water word)", (
   });
 });
 
+describe("the Battersea Bridge false match (real bug: Notion card 10, matchedPlace used .some() not .every())", () => {
+  // "Battersea Bridge" has no recognised water word at all, so it becomes a
+  // settlement-only query for tokens ["battersea", "bridge"]. "Bridge" alone
+  // is a common word many real, completely unrelated UK gauge names happen
+  // to contain ("X at Y Bridge") - matchedPlace's old .some() check let that
+  // one generic shared word alone count as "the right place", silently
+  // offering a station up to 40km away (MAX_MATCH_DISTANCE_KM) that had
+  // nothing to do with the actual place searched for. The distinctive word,
+  // "battersea", never had to match at all.
+  const SOME_UNRELATED_BRIDGE_STATION: NrfaStation = {
+    id: 88888, name: "Mole at Esher Bridge", river: "Mole",
+    easting: 513000, northing: 165000, "catchment-area": 350,
+  };
+
+  it("does NOT count it as a real place match, and the weak leftover overlap score stays well below the 'worth offering' threshold", () => {
+    const parsed = parseQuery("battersea bridge");
+    expect(parsed.settlement).toBe("battersea bridge"); // "bridge" isn't a water word, so it's all settlement
+    const m = scoreStation(parsed, SOME_UNRELATED_BRIDGE_STATION);
+    expect(m.matchedPlace).toBe(false);
+    // Not literally 0 - the fallback overlap scorer still sees "bridge"
+    // shared with the station name, same as it would for any single
+    // coincidental word - but at 0.225 it sits below rankStations' 0.3
+    // "worth offering" floor, so it never reaches the user as a candidate.
+    // See the next test.
+    expect(m.score).toBeLessThan(0.3);
+  });
+
+  it("still matches when EVERY settlement token is present, not just one", () => {
+    const parsed = parseQuery("esher bridge");
+    const m = scoreStation(parsed, SOME_UNRELATED_BRIDGE_STATION);
+    expect(m.matchedPlace).toBe(true);
+  });
+
+  it("rankStations returns nothing for 'Battersea Bridge' against a station list with no real Battersea gauge - insufficient data, not a distant guess", () => {
+    const parsed = parseQuery("battersea bridge");
+    const ranked = rankStations(parsed, [...STATIONS, SOME_UNRELATED_BRIDGE_STATION]);
+    expect(ranked).toEqual([]);
+  });
+});
+
 describe("parseCoordinates - the lat/lon direct-input path", () => {
   it("reads real coordinates for Frensham Great Pond", () => {
     expect(parseCoordinates("51.154565, -0.791587")).toEqual({ lat: 51.154565, lon: -0.791587 });
@@ -223,6 +263,13 @@ describe("deciding whether to ask", () => {
     expect(r.needsConfirmation).toBe(true);
     expect(r.statement).toContain("Wey at Tilford");
     expect(r.statement).toContain("396.3 km²");
+  });
+
+  it("always states the real distance from the geocoded anchor, never hides it (Notion card 10)", () => {
+    const parsed = parseQuery("Tilford, River Wey");
+    const anchor = { easting: 487300, northing: 144400 }; // 1km north of the real station
+    const r = decideResolution(parsed, rankStations(parsed, STATIONS, 5, anchor));
+    expect(r.statement).toMatch(/1\.0 km from where you typed/);
   });
 
   it("asks which, when several reaches match equally", () => {

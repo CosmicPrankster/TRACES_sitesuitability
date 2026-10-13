@@ -151,6 +151,19 @@ export interface StationMatch {
  * A station only scores when BOTH halves line up: the river name and the place.
  * Matching a river alone would put us anywhere along it - the exact failure
  * this is here to prevent.
+ *
+ * Real bug found 2026-10-13 ("Battersea Bridge" resolving to a station
+ * 12 km away, Notion card 10): `matchedPlace` used to accept ANY ONE
+ * settlement token matching (`.some()`), while `matchedRiver` already
+ * required EVERY water token to match (`.every()`) - an inconsistency, not
+ * a deliberate choice. "Battersea Bridge" has no water word at all, so it
+ * becomes a settlement-only query for tokens ["battersea", "bridge"] - and
+ * "bridge" alone, a generic word many real UK gauge names happen to
+ * contain ("X at Y Bridge"), was enough to call a completely unrelated
+ * station "at the right place". Fixed by requiring every settlement token
+ * to match, same discipline matchedRiver already uses - a station whose
+ * place name doesn't contain the DISTINCTIVE word ("battersea") no longer
+ * counts as a place match just because it happens to share a common one.
  */
 export function scoreStation(parsed: ParsedQuery, station: NrfaStation): StationMatch {
   const stationRiverTokens = new Set(tokens(station.river ?? ""));
@@ -166,7 +179,7 @@ export function scoreStation(parsed: ParsedQuery, station: NrfaStation): Station
   const matchedRiver =
     queryWaterTokens.length > 0 && queryWaterTokens.every((t) => stationRiverTokens.has(t));
   const matchedPlace =
-    querySettlementTokens.length > 0 && querySettlementTokens.some((t) => placeTokens.has(t));
+    querySettlementTokens.length > 0 && querySettlementTokens.every((t) => placeTokens.has(t));
 
   // Fall back to whole-query overlap when the query could not be split.
   const overlap = parsed.allTokens.filter(
@@ -353,11 +366,18 @@ export function decideResolution(parsed: ParsedQuery, matches: StationMatch[]): 
 
   if (exact.length === 1) {
     const s = exact[0].station;
+    const distance = exact[0].distanceKm;
     return {
       confidence: "likely",
       statement:
         `That looks like ${s.name} — NRFA gauging station ${s.id}` +
         (s["catchment-area"] ? `, catchment area ${s["catchment-area"]} km²` : "") +
+        // Distance was computed but silently dropped before this fix -
+        // "the wrong reach is the worst silent failure" applies just as
+        // much to a reach that's merely far away as to one that's wrong
+        // outright (Notion card 10). Always shown when known, so a user
+        // can judge for themselves whether "12 km away" is close enough.
+        (typeof distance === "number" ? `, ${distance.toFixed(1)} km from where you typed` : "") +
         ". Is that the right stretch of water?",
       needsConfirmation: true,
       candidates: matches,

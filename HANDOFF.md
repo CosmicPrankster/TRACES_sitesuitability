@@ -127,7 +127,7 @@ hierarchy of sources that stops at the first tier with usable data. See
 each tier's live/untested/dropped status — it is not repeated here to avoid
 the two files drifting apart again.
 
-`npm test` — 362 tests, no network, no API keys.
+`npm test` — 366 tests, no network, no API keys.
 `npx tsc --noEmit` / `npx next build` — both clean.
 `node --env-file=.env.local scripts/probe-new-sources.mjs` — needs internet,
 optional API keys for the tide and satellite tiers.
@@ -265,6 +265,19 @@ place; NRFA matches beyond 40 km are rejected. Do not remove either guard.
 **A river is a line, a town is a point.** "Tilford, River Wey" means the Wey
 *where it runs through Tilford*. Anchor on the settlement. Geocoding the river
 alone put us 4 km out.
+
+**A generic shared word is not a place match.** "Battersea Bridge" (no water
+word, so a settlement-only query) matched a totally unrelated gauge 12 km
+away, because `matchedPlace` only required ONE settlement token to match
+(`.some()`) - and "bridge" alone, a word many genuinely unrelated UK gauge
+names happen to contain ("X at Y Bridge"), was enough. `matchedRiver` already
+required EVERY water token to match (`.every()`); `matchedPlace` now does
+too (fixed 2026-10-13, Notion card 10) - a station's place name has to
+contain the DISTINCTIVE word, not just share one it has in common with half
+the gauges in the country. The exact-match confirmation statement also now
+always states the real distance from the geocoded point, never silently
+drops it, so a bad-but-not-rejected match is at least visibly far away
+rather than presented with unwarranted confidence.
 
 **Permeability is not grain size.** NRFA classes the Spey's bedrock
 low-permeability, which reads as fine — but it is psammite under glaciofluvial
