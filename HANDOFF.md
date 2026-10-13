@@ -320,6 +320,21 @@ every other live tier. The lesson: when a new source lands, grep the view
 layer for it, not just the API layer — "it's in the response" is not "it's
 visible."
 
+**The highest-confidence tier must not depend on a lower one succeeding
+first.** When the character-override selector was removed (2026-10-13, see
+below), `ReportView.tsx`'s `current` value was briefly computed as
+`live ? (fieldResult ?? live) : null` — which meant an on-site field
+reading (grain card / settle test / turbidity tube) could only be applied
+*after* a site had already resolved via NRFA/geocoding. That inverts the
+project's own priority order: a field reading is supposed to be the
+strongest tier precisely because it works when geocoding or NRFA matching
+fails or was never attempted — see `lib/field-update.ts`'s header. Fixed
+same day: `current` is now `fieldResult ?? live`, and the field-update
+`<details>` is rendered unconditionally (moved to the bottom of the page)
+rather than nested inside the live-site-only report block. Verified live
+with Playwright: submitting a grain-card reading from a cold start, with no
+site ever looked up, now produces a full report on its own.
+
 ## UI redesign (2026-10-13) — editorial/journal direction
 
 The original UI (`app/globals.css`, `app/ReportView.tsx`) was a plain

@@ -155,8 +155,15 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
 
   const live = flow.phase === "screened" ? flow : null;
   const fieldResult = fieldUpdate.phase === "done" ? fieldUpdate.result : null;
-  /** The report currently on screen - a field reading if one was applied, otherwise the live screening. Null until a site is confirmed; there is no assumed-character fallback. */
-  const current = live ? (fieldResult ?? live) : null;
+  /**
+   * The report currently on screen - a field reading if one was applied,
+   * otherwise the live screening, otherwise nothing (there is no
+   * assumed-character fallback). A field reading stands on its own: it must
+   * NOT require `live` - it is the highest-confidence tier precisely
+   * because it works even when geocoding/NRFA matching has failed or was
+   * never attempted (see HANDOFF.md's 2026-10-13 field-update-gating note).
+   */
+  const current = fieldResult ?? live;
 
   async function submitFieldUpdate() {
     setFieldUpdate({ phase: "submitting" });
@@ -511,7 +518,7 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
         </section>
       )}
 
-      {!live && (
+      {!current && (
         <section className="input-row homepage-placeholder">
           <p>
             This tool screens a UK river, stream or other waterbody site for hydrocyclone
@@ -610,128 +617,6 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
             </table>
           </section>
 
-          <details className="field-update-section" open={Boolean(fieldResult)}>
-            <summary>On-site field update</summary>
-            <p className="field-update-sub">
-              Standing at the site right now? A real field reading replaces the desk-based guess
-              for this report, deterministically - no site visit needed to rebuild anything.
-            </p>
-            <div className="field-update-chat">
-              <label htmlFor="field-chat">
-                Or describe what you saw, in your own words
-                <textarea
-                  id="field-chat"
-                  value={chatMessage}
-                  onChange={(e) => setChatMessage(e.target.value)}
-                  placeholder={'e.g. "looks like fine sand, cleared within 10 minutes"'}
-                  rows={2}
-                />
-              </label>
-              <button type="button" onClick={submitChatMessage} disabled={!chatMessage.trim() || fieldUpdate.phase === "submitting"}>
-                {fieldUpdate.phase === "submitting" ? "Parsing..." : "Parse & apply"}
-              </button>
-              <p className="hint">
-                Parsed into the same fields as the form below, never scored directly - AI (here, a
-                deterministic parser) only ever reads words into structured fields; see HANDOFF.md.
-              </p>
-              {chatIntake && (
-                <div className="hint">
-                  {chatIntake.parsedFrom.map((line, i) => (
-                    <p key={`parsed-${i}`}>Understood: {line}</p>
-                  ))}
-                  {chatIntake.warnings.map((line, i) => (
-                    <p key={`warn-${i}`}>Not understood: {line}</p>
-                  ))}
-                </div>
-              )}
-            </div>
-            <div className="field-update-form">
-              <label htmlFor="grain-card">
-                Grain card match
-                <select id="grain-card" value={grainCardClass} onChange={(e) => setGrainCardClass(e.target.value)}>
-                  {GRAIN_CARD_OPTIONS.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <label htmlFor="settle-cleared">
-                Settle test - cleared within (minutes)
-                <input
-                  id="settle-cleared"
-                  type="number"
-                  min="0"
-                  value={settleCleared}
-                  onChange={(e) => setSettleCleared(e.target.value)}
-                  placeholder="e.g. 5"
-                />
-              </label>
-              <label htmlFor="settle-hazy">
-                ...or still hazy after (hours)
-                <input
-                  id="settle-hazy"
-                  type="number"
-                  min="0"
-                  value={settleHazyHours}
-                  onChange={(e) => setSettleHazyHours(e.target.value)}
-                  placeholder="e.g. 6"
-                />
-              </label>
-              <label htmlFor="turbidity-tube">
-                Turbidity tube reading (cm)
-                <input
-                  id="turbidity-tube"
-                  type="number"
-                  min="0"
-                  value={turbidityTube}
-                  onChange={(e) => setTurbidityTube(e.target.value)}
-                  placeholder="context only - not scored"
-                />
-              </label>
-              <label htmlFor="site-note">
-                Site note
-                <input id="site-note" type="text" value={siteNote} onChange={(e) => setSiteNote(e.target.value)} placeholder="anything else worth recording" />
-              </label>
-              <div className="field-update-actions">
-                <button type="button" onClick={submitFieldUpdate} disabled={!grainCardClass || fieldUpdate.phase === "submitting"}>
-                  {fieldUpdate.phase === "submitting" ? "Recomputing..." : "Apply field reading"}
-                </button>
-                {fieldResult && (
-                  <button type="button" onClick={clearFieldUpdate}>
-                    Clear field reading, use the desk estimate again
-                  </button>
-                )}
-              </div>
-            </div>
-            {fieldUpdate.phase === "no-evidence" && <p className="hint">{fieldUpdate.message}</p>}
-            {fieldUpdate.phase === "failed" && <p className="hint">{fieldUpdate.message}</p>}
-            {fieldResult && (
-              <div className="live-status live-ok">
-                <p>
-                  <strong>Field reading applied:</strong> {fieldResult.psd.label} (status: {fieldResult.psd.status})
-                </p>
-                <ul>
-                  {fieldResult.fieldReasoning.map((line, i) => (
-                    <li key={i}>{line}</li>
-                  ))}
-                </ul>
-                {fieldResult.additionalContext.length > 0 && (
-                  <>
-                    <p className="hint">Additional context (not scored):</p>
-                    <ul>
-                      {fieldResult.additionalContext.map((line, i) => (
-                        <li key={i} className="hint">
-                          {line}
-                        </li>
-                      ))}
-                    </ul>
-                  </>
-                )}
-              </div>
-            )}
-          </details>
-
           {selectedUplift && (
             <section className="cell-detail">
               <h3>
@@ -810,6 +695,130 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
           )}
         </>
       )}
+
+      <details className="field-update-section" open={Boolean(fieldResult)}>
+        <summary>On-site field update</summary>
+        <p className="field-update-sub">
+          Standing at the site right now? A real field reading produces this report directly, with
+          or without a site resolved above - deterministically, no site visit needed to rebuild
+          anything. This is the highest-confidence tier: it works even when a site can't be found
+          or matched.
+        </p>
+        <div className="field-update-chat">
+          <label htmlFor="field-chat">
+            Or describe what you saw, in your own words
+            <textarea
+              id="field-chat"
+              value={chatMessage}
+              onChange={(e) => setChatMessage(e.target.value)}
+              placeholder={'e.g. "looks like fine sand, cleared within 10 minutes"'}
+              rows={2}
+            />
+          </label>
+          <button type="button" onClick={submitChatMessage} disabled={!chatMessage.trim() || fieldUpdate.phase === "submitting"}>
+            {fieldUpdate.phase === "submitting" ? "Parsing..." : "Parse & apply"}
+          </button>
+          <p className="hint">
+            Parsed into the same fields as the form below, never scored directly - AI (here, a
+            deterministic parser) only ever reads words into structured fields; see HANDOFF.md.
+          </p>
+          {chatIntake && (
+            <div className="hint">
+              {chatIntake.parsedFrom.map((line, i) => (
+                <p key={`parsed-${i}`}>Understood: {line}</p>
+              ))}
+              {chatIntake.warnings.map((line, i) => (
+                <p key={`warn-${i}`}>Not understood: {line}</p>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="field-update-form">
+          <label htmlFor="grain-card">
+            Grain card match
+            <select id="grain-card" value={grainCardClass} onChange={(e) => setGrainCardClass(e.target.value)}>
+              {GRAIN_CARD_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label htmlFor="settle-cleared">
+            Settle test - cleared within (minutes)
+            <input
+              id="settle-cleared"
+              type="number"
+              min="0"
+              value={settleCleared}
+              onChange={(e) => setSettleCleared(e.target.value)}
+              placeholder="e.g. 5"
+            />
+          </label>
+          <label htmlFor="settle-hazy">
+            ...or still hazy after (hours)
+            <input
+              id="settle-hazy"
+              type="number"
+              min="0"
+              value={settleHazyHours}
+              onChange={(e) => setSettleHazyHours(e.target.value)}
+              placeholder="e.g. 6"
+            />
+          </label>
+          <label htmlFor="turbidity-tube">
+            Turbidity tube reading (cm)
+            <input
+              id="turbidity-tube"
+              type="number"
+              min="0"
+              value={turbidityTube}
+              onChange={(e) => setTurbidityTube(e.target.value)}
+              placeholder="context only - not scored"
+            />
+          </label>
+          <label htmlFor="site-note">
+            Site note
+            <input id="site-note" type="text" value={siteNote} onChange={(e) => setSiteNote(e.target.value)} placeholder="anything else worth recording" />
+          </label>
+          <div className="field-update-actions">
+            <button type="button" onClick={submitFieldUpdate} disabled={!grainCardClass || fieldUpdate.phase === "submitting"}>
+              {fieldUpdate.phase === "submitting" ? "Recomputing..." : "Apply field reading"}
+            </button>
+            {fieldResult && (
+              <button type="button" onClick={clearFieldUpdate}>
+                {live ? "Clear field reading, use the desk estimate again" : "Clear field reading"}
+              </button>
+            )}
+          </div>
+        </div>
+        {fieldUpdate.phase === "no-evidence" && <p className="hint">{fieldUpdate.message}</p>}
+        {fieldUpdate.phase === "failed" && <p className="hint">{fieldUpdate.message}</p>}
+        {fieldResult && (
+          <div className="live-status live-ok">
+            <p>
+              <strong>Field reading applied:</strong> {fieldResult.psd.label} (status: {fieldResult.psd.status})
+            </p>
+            <ul>
+              {fieldResult.fieldReasoning.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+            </ul>
+            {fieldResult.additionalContext.length > 0 && (
+              <>
+                <p className="hint">Additional context (not scored):</p>
+                <ul>
+                  {fieldResult.additionalContext.map((line, i) => (
+                    <li key={i} className="hint">
+                      {line}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
+          </div>
+        )}
+      </details>
 
       <footer className="page-footer">
         Do not enter confidential or commercially sensitive information. Runs are logged to this
