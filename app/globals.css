@@ -82,23 +82,338 @@ main {
 }
 
 .homepage-placeholder {
-  display: block;
-  font-family: var(--font-serif), serif;
-  font-size: 1.1rem;
-  line-height: 1.6;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+/* Expandable (motion) - the title page's three info boxes and the content
+   page's finding boxes (Notion card 11). Animates open/close via the CSS
+   grid-rows 0fr->1fr technique: transitions smoothly to the content's
+   natural height with no JS measurement and no animation library. */
+.expandable {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  overflow: hidden;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.expandable:hover {
+  border-color: var(--accent);
+}
+
+.expandable-open {
+  box-shadow: 0 2px 12px rgba(36, 35, 29, 0.07);
+}
+
+.expandable-trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.9rem 1.1rem;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
   color: var(--text);
 }
 
-.homepage-placeholder p {
-  margin: 0 0 0.5rem;
+.expandable-trigger-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
 }
 
-.homepage-placeholder .hint {
+.expandable-title {
+  font-family: var(--font-serif), serif;
+  font-size: 1.05rem;
+}
+
+.expandable-subtitle {
   font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.7rem;
+  font-size: 0.68rem;
   letter-spacing: 0.04em;
   text-transform: uppercase;
-  margin: 0;
+  color: var(--text-muted);
+}
+
+.expandable-chevron {
+  flex: none;
+  color: var(--accent);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.expandable-open .expandable-chevron {
+  transform: rotate(180deg);
+}
+
+.expandable-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.expandable-open .expandable-panel {
+  grid-template-rows: 1fr;
+}
+
+.expandable-panel-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.expandable-panel-inner > div {
+  padding: 0 1.1rem 1.1rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.expandable-panel-inner p {
+  margin: 0 0 0.6rem;
+}
+
+.expandable-panel-inner ul {
+  margin: 0 0 0.6rem;
+  padding-left: 1.1rem;
+}
+
+.expandable-panel-inner li {
+  margin-bottom: 0.3rem;
+}
+
+/* Inline status pill - the strong/marginal/insufficient colour tokens,
+   reused here for a badge sitting in an Expandable's trigger row. */
+.pill {
+  flex: none;
+  display: inline-block;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.68rem;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+  color: var(--text-muted);
+}
+
+.pill.stat-strong {
+  border-color: var(--strong);
+  background: var(--strong-bg);
+  color: var(--strong);
+}
+
+.pill.stat-marginal {
+  border-color: var(--marginal);
+  background: var(--marginal-bg);
+  color: var(--marginal);
+}
+
+.pill.stat-insufficient {
+  border-color: var(--insufficient);
+  color: var(--insufficient);
+}
+
+/* Minimal status row - content page (b): one compact line, not a banner. */
+.status-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 0.6rem;
+  padding: 0.4rem 0.1rem;
+  margin-bottom: 1rem;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  border-bottom: 1px dashed var(--border);
+}
+
+.status-bar strong {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* Content page split row (c): findings on the left, report download on the right. */
+.content-split {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr;
+  gap: 1.25rem;
+  margin-bottom: 1.5rem;
+  align-items: start;
+}
+
+@media (max-width: 720px) {
+  .content-split {
+    grid-template-columns: 1fr;
+  }
+}
+
+.content-split-left {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.content-split-left .stat-strip {
+  margin-bottom: 0.1rem;
+}
+
+.content-split-right {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  align-items: flex-start;
+  position: sticky;
+  top: 1.5rem;
+}
+
+.content-split-right .btn {
+  width: 100%;
+  text-align: center;
+}
+
+/* f) placeholder for a future chat-about-this-result feature - clearly
+   marked not built yet, never faked as working. */
+.chat-placeholder {
+  background: var(--surface);
+  border: 1px dashed var(--border);
+  border-radius: 6px;
+  padding: 1.1rem 1.25rem;
+  margin-top: 1.5rem;
+}
+
+.chat-placeholder h2 {
+  margin-top: 0;
+}
+
+.chat-placeholder-box {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.4rem;
+}
+
+.chat-placeholder-box input {
+  flex: 1;
+  font-size: 0.9rem;
+  font-family: var(--font-body);
+  padding: 0.5rem 0.7rem;
+  border-radius: 4px;
+  border: 1px solid var(--border);
+  background: var(--surface-sunk);
+  color: var(--text-muted);
+}
+
+.chat-placeholder-box input:disabled,
+.chat-placeholder-box button:disabled {
+  opacity: 0.55;
+}
+
+.badge-soon {
+  display: inline-block;
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 999px;
+  background: var(--surface-sunk);
+  color: var(--text-muted);
+  font-family: var(--font-mono), ui-monospace, monospace;
+  font-size: 0.62rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+
+/* "Download full report": nothing on screen, everything via @media print -
+   the browser's native print-to-PDF, so no PDF-generation dependency is
+   needed. The visibility toggle hides every other element while printing. */
+.printable-report {
+  display: none;
+}
+
+.printable-header,
+.printable-footer {
+  display: none;
+}
+
+@media print {
+  body {
+    background: #fff;
+    background-image: none;
+  }
+  body * {
+    visibility: hidden;
+  }
+  .printable-report,
+  .printable-report * {
+    visibility: visible;
+  }
+  .printable-report {
+    display: block;
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    background: #fff;
+    color: #000;
+  }
+  .printable-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    border-bottom: 2px solid #000;
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+    font-family: var(--font-serif), serif;
+  }
+  .printable-footer {
+    display: block;
+    margin-top: 2rem;
+    padding-top: 0.5rem;
+    border-top: 1px solid #000;
+    font-size: 0.75rem;
+  }
+  @page {
+    margin: 2cm;
+  }
+}
+
+/* Motion: sections fade/slide in on mount (every state transition mounts a
+   fresh node via conditional rendering, so this replays automatically with
+   no extra JS). */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.enter-animate {
+  animation: fadeSlideIn 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .enter-animate,
+  .expandable-panel,
+  .expandable-chevron,
+  .cell,
+  .stat-chip,
+  .btn {
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 .site-input-row {
@@ -134,6 +449,7 @@ main {
   color: var(--surface);
   cursor: pointer;
   white-space: nowrap;
+  transition: transform 0.12s ease, box-shadow 0.12s ease, opacity 0.12s ease;
 }
 
 .btn:disabled,
@@ -142,6 +458,22 @@ main {
 .field-update-actions button:disabled {
   opacity: 0.45;
   cursor: default;
+}
+
+.btn:not(:disabled):hover,
+.site-input-row button:not(:disabled):hover,
+.field-update-chat button:not(:disabled):hover,
+.field-update-actions button:not(:disabled):hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(36, 35, 29, 0.14);
+}
+
+.btn:not(:disabled):active,
+.site-input-row button:not(:disabled):active,
+.field-update-chat button:not(:disabled):active,
+.field-update-actions button:not(:disabled):active {
+  transform: scale(0.97);
+  box-shadow: none;
 }
 
 .field-update-actions button:nth-child(2) {
@@ -239,15 +571,8 @@ main {
   color: var(--text);
 }
 
-/* Station headline - the one piece of always-visible prose in the live-ok card. */
-.station-line {
-  font-family: var(--font-serif), serif;
-  font-size: 1.05rem;
-  margin: 0 0 0.7rem;
-}
-
-/* Compact chip strip - character / flags / tide / satellite / EA concentration,
-   replacing what used to be five separate always-expanded paragraphs. */
+/* Compact chip strip - EA water quality / tide / satellite context readings,
+   sitting above the three named finding boxes on the content page. */
 .stat-strip {
   display: flex;
   flex-wrap: wrap;
@@ -264,6 +589,11 @@ main {
   border: 1px solid var(--border);
   background: var(--surface-sunk);
   min-width: 7rem;
+  transition: transform 0.15s ease;
+}
+
+.stat-chip:hover {
+  transform: translateY(-1px);
 }
 
 .stat-chip .eyebrow {
@@ -293,50 +623,6 @@ main {
 
 .stat-chip.stat-insufficient .stat-value {
   color: var(--insufficient);
-}
-
-details.disclosure {
-  margin-top: 0.6rem;
-}
-
-details.disclosure > summary {
-  cursor: pointer;
-  list-style: none;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.72rem;
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--accent);
-}
-
-details.disclosure > summary::-webkit-details-marker {
-  display: none;
-}
-
-details.disclosure > summary::before {
-  content: "+ ";
-}
-
-details.disclosure[open] > summary::before {
-  content: "\2212 "; /* minus sign */
-}
-
-details.disclosure .disclosure-body {
-  margin-top: 0.6rem;
-  padding-top: 0.6rem;
-  border-top: 1px dashed var(--border);
-  font-size: 0.86rem;
-  color: var(--text-muted);
-}
-
-details.disclosure .disclosure-body ul {
-  margin: 0;
-  padding-left: 1.1rem;
-}
-
-details.disclosure .disclosure-body li {
-  margin-bottom: 0.25rem;
 }
 
 .field-update-section > summary {
@@ -371,12 +657,6 @@ details.disclosure .disclosure-body li {
   letter-spacing: normal;
   font-weight: 400;
   margin: 0.2rem 0 0.9rem;
-}
-
-.field-update-row {
-  flex-direction: column;
-  align-items: stretch;
-  padding-top: 1rem;
 }
 
 .field-update-chat {
@@ -527,6 +807,12 @@ table.grid tbody th[scope="row"] {
   flex-direction: column;
   gap: 0.15rem;
   font: inherit;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.cell:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 7px rgba(36, 35, 29, 0.1);
 }
 
 .cell-verdict {
@@ -575,20 +861,6 @@ table.grid tbody th[scope="row"] {
 
 .cell-detail h3 {
   margin-top: 0;
-}
-
-.expand-toggle {
-  margin-top: 1.5rem;
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 0.5rem 1rem;
-  font-family: var(--font-mono), ui-monospace, monospace;
-  font-size: 0.74rem;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  color: var(--accent);
-  cursor: pointer;
 }
 
 .full-report {

@@ -366,6 +366,50 @@ against the actual prototype file
 (`https://www.figma.com/design/FBZHLWJTsOUXxGGY44wuTb/Fellowship?node-id=100-2`)
 rather than the inspiration-image inference used here.
 
+## Two-page hierarchy rebuild (2026-10-16) — Notion card 11
+
+Rebuilt `app/ReportView.tsx`/`app/globals.css` again, this time against an
+exact layout spec the user wrote on the Notion board (card "11. Site Design
+Updates") rather than inferred from inspiration images: a **title page**
+(site-input bar + three expandable boxes - What it is / How it works / How
+to contribute data) shown until something resolves, and a **content page**
+(status bar, a split row of findings-left/report-download-right, the
+configuration table as its own full-width row, a field-data control, and a
+placeholder for a future chat-about-results feature) shown once it does.
+
+New pieces built for this:
+- **`Expandable`** - a small controlled component animating open/close via
+  the CSS `grid-template-rows: 0fr -> 1fr` technique (modern, no JS height
+  measurement, no animation library). Used for the title page's three info
+  boxes and the content page's three named finding boxes (Found character /
+  Algae risk / Inhibition risk), each with its own explanation rather than
+  one shared disclosure.
+- **"Download full report" as a real PDF, with no new dependency.** A
+  `.printable-report` block (hidden on screen) holds the full verdict/why/
+  know/don't-know/recommended-test/config-table content with a header (site
+  name + date) and footer (the disclaimer line that was previously removed
+  from the page header entirely, see the round-2 UI feedback above - it now
+  lives here instead of nowhere). `@media print` hides every other element
+  via `visibility: hidden` and shows only this block; clicking the button
+  calls `window.print()`, and "Save as PDF" in the print dialog is the
+  download - the browser's native print-to-PDF, not a PDF-generation
+  library. Verified by emulating print media in Playwright.
+- Motion beyond what was asked: a shared `fadeSlideIn` keyframe on every
+  major section (replays automatically on each state transition, since
+  conditional rendering mounts a fresh node each time - no extra JS),
+  hover/active micro-interactions on buttons, table cells and stat chips,
+  and a `prefers-reduced-motion` override that disables all of it.
+
+One deliberate deviation from the card's literal spec: the on-site
+field-update tool is listed under "2. Content page" (rows e/f), but it is
+NOT gated to the content page here - it renders unconditionally, on both
+pages, for the exact reason in the entry above this one (2026-10-13): a
+field reading must work standalone, without requiring a site to have
+resolved first. Gating it to the content page would silently reintroduce
+that regression. The "chat about this result" placeholder (f) IS gated to
+the content page, since chatting about a result that doesn't exist yet has
+no meaning.
+
 ## Reservations — be honest about these with the user
 
 **The cut sizes are guesses, and the validation loop now shows by how much

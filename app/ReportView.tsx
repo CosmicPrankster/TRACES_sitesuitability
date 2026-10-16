@@ -138,10 +138,51 @@ type FieldUpdateState =
   | { phase: "no-evidence"; message: string }
   | { phase: "failed"; message: string };
 
+/**
+ * A controlled, animated expand/collapse card - used for the title page's
+ * three info boxes and the content page's three finding boxes (Notion card
+ * 11). Animates open/close via the CSS grid-rows 0fr->1fr technique, which
+ * transitions smoothly to the content's natural height with no JS
+ * measurement and no animation library.
+ */
+function Expandable({
+  title,
+  subtitle,
+  badge,
+  defaultOpen = false,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  badge?: React.ReactNode;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className={`expandable ${open ? "expandable-open" : ""}`}>
+      <button type="button" className="expandable-trigger" onClick={() => setOpen((o) => !o)} aria-expanded={open}>
+        <span className="expandable-trigger-text">
+          <span className="expandable-title">{title}</span>
+          {subtitle && <span className="expandable-subtitle">{subtitle}</span>}
+        </span>
+        {badge}
+        <span className="expandable-chevron" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      <div className="expandable-panel">
+        <div className="expandable-panel-inner">
+          <div>{children}</div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function ReportView({ hydrocyclones, membranes }: Props) {
   const [query, setQuery] = useState("");
   const [flow, setFlow] = useState<FlowState>({ phase: "idle" });
-  const [expanded, setExpanded] = useState(false);
   const [selected, setSelected] = useState<SelectedDetail | null>(null);
 
   const [fieldUpdate, setFieldUpdate] = useState<FieldUpdateState>({ phase: "idle" });
@@ -351,6 +392,13 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
     }
   }
 
+  /** What the printable report's header calls the site - the best name available for whichever tier produced `current`. */
+  function siteLabel(): string {
+    if (live?.station) return live.station.name;
+    if (live?.geocode) return live.geocode.displayName;
+    return "Field-observed site (no site resolved)";
+  }
+
   return (
     <main>
       <header className="page-header">
@@ -379,13 +427,13 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
       </section>
 
       {flow.phase === "match-failed" && (
-        <section className="live-status live-error">
+        <section className="live-status live-error enter-animate">
           <strong>Could not resolve that site ({flow.stage}):</strong> {flow.message}
         </section>
       )}
 
       {flow.phase === "confirm" && (
-        <section className="live-status live-confirm">
+        <section className="live-status live-confirm enter-animate">
           <p>{flow.resolution.statement}</p>
           <ul className="candidate-list">
             {flow.resolution.candidates.map((c) => (
@@ -410,129 +458,84 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
       )}
 
       {flow.phase === "screening" && (
-        <section className="live-status live-pending">Screening {flow.stationName}...</section>
+        <section className="live-status live-pending enter-animate">Screening {flow.stationName}...</section>
       )}
 
       {flow.phase === "screen-failed" && (
-        <section className="live-status live-error">
+        <section className="live-status live-error enter-animate">
           <strong>Matched, but could not screen it:</strong> {flow.message}
         </section>
       )}
 
-      {live && live.source === "geology-only" && (
-        <section className="live-status live-geology-only">
-          <p>
-            <strong>No NRFA gauge nearby</strong> - normal for a small or urban watercourse. Reading
-            from the mapped geology at this point only, not a catchment-wide inference.
-          </p>
-          {live.geocode && live.geocode.matchedOn === "coordinates" ? (
-            <p>
-              <strong>Anchor point:</strong> the exact coordinates given ({live.geocode.displayName}) -
-              no settlement name involved, so no anchor-precision caveat applies here.
-            </p>
-          ) : (
-            live.geocode && (
-              <p>
-                <strong>Anchor point:</strong> &quot;{live.geocode.matchedOn}&quot; ({live.geocode.displayName}).
-                For a small watercourse this is often the nearest settlement, not the water itself -
-                if it runs some distance from that point, the geology there may differ from what is
-                mapped here. Treat this reading as a rough starting point, not the site itself confirmed.
-              </p>
-            )
-          )}
-        </section>
-      )}
-
-      {live && (
-        <section className="live-status live-ok">
-          {live.station && (
-            <p className="station-line">
-              {live.station.name} <span className="mono">· NRFA {live.station.id}</span>
-              {live.station["catchment-area"] ? ` · ${live.station["catchment-area"]} km² catchment` : ""}
-            </p>
-          )}
-
-          <div className="stat-strip">
-            <div className="stat-chip">
-              <span className="eyebrow">Character</span>
-              <span className="stat-value">
-                {CHARACTER_LABELS[live.characterInference.character]} ({live.characterInference.confidence})
-              </span>
-            </div>
-            <div className={`stat-chip ${FLAG_RISK_STYLE[live.flags.algae.risk].className}`}>
-              <span className="eyebrow">Algae risk</span>
-              <span className="stat-value">{FLAG_RISK_STYLE[live.flags.algae.risk].label}</span>
-            </div>
-            <div className={`stat-chip ${FLAG_RISK_STYLE[live.flags.inhibition.risk].className}`}>
-              <span className="eyebrow">Inhibition risk</span>
-              <span className="stat-value">{FLAG_RISK_STYLE[live.flags.inhibition.risk].label}</span>
-            </div>
-            {live.siteConcentration && (
-              <div className="stat-chip">
-                <span className="eyebrow">EA water quality</span>
-                <span className="stat-value">{live.siteConcentration.mgL.toFixed(1)} mg/L</span>
-              </div>
-            )}
-            {live.tideState && (
-              <div className="stat-chip">
-                <span className="eyebrow">Tide state</span>
-                <span className="stat-value">
-                  {live.tideState.phase}, {live.tideState.springNeap}
-                </span>
-              </div>
-            )}
-            {live.satelliteTurbidity && (
-              <div className="stat-chip">
-                <span className="eyebrow">Satellite turbidity</span>
-                <span className="stat-value">NDTI {live.satelliteTurbidity.ndtiMean.toFixed(3)}</span>
-              </div>
-            )}
-          </div>
-
-          <details className="disclosure">
-            <summary>Reasoning behind these readings</summary>
-            <div className="disclosure-body">
-              <ul>
-                {live.characterInference.reasoning.map((line, i) => (
-                  <li key={`char-${i}`}>{line}</li>
-                ))}
-                <li>Algae risk: {live.flags.algae.reasoning}</li>
-                <li>Inhibition risk: {live.flags.inhibition.reasoning}</li>
-                {live.siteConcentration && <li>EA water quality: {live.siteConcentration.source}</li>}
-                {live.tideState && (
-                  <li>
-                    Tide: {live.tideState.station.name} tide station, {live.tideState.station.distanceKm.toFixed(1)} km
-                    away. {live.tideState.reasoning}
-                  </li>
-                )}
-                {live.satelliteTurbidity && (
-                  <li>
-                    Satellite turbidity (context only, not scored): {live.satelliteTurbidity.sampleCount} of{" "}
-                    {live.satelliteTurbidity.sampleCount + live.satelliteTurbidity.noDataCount} pixels cloud-free.{" "}
-                    {live.satelliteTurbidity.reasoning}
-                  </li>
-                )}
-              </ul>
-            </div>
-          </details>
-        </section>
-      )}
-
+      {/* ---------- TITLE PAGE: shown until something is resolved (Notion card 11, section 1) ---------- */}
       {!current && (
-        <section className="input-row homepage-placeholder">
-          <p>
-            This tool screens a UK river, stream or other waterbody site for hydrocyclone
-            pre-treatment and membrane filtration suitability - combining live geology,
-            water-quality, tide and satellite readings for the site you enter with real site trial
-            data where it exists. Enter a site above to get started.
-          </p>
-          <p className="hint">More about the method will go here.</p>
+        <section className="homepage-placeholder enter-animate">
+          <Expandable title="What it is" defaultOpen>
+            <p>
+              A screening tool for UK river, stream or other waterbody sites: how much water a
+              membrane filter is likely to pass before it blinds, with and without hydrocyclone
+              pre-treatment, before any equipment is bought or a bench trial is run.
+            </p>
+            <p>
+              It combines live geology, measured water-quality, tide and satellite readings for
+              the site you enter with real site trial data where it exists - and says plainly
+              when it doesn&apos;t have enough to give a confident answer, rather than guessing.
+            </p>
+          </Expandable>
+          <Expandable title="How it works">
+            <p>
+              Evidence is read in priority order, strongest first: a real on-site reading, then
+              measured water quality nearby, then satellite turbidity on larger rivers, then
+              catchment geology from the nearest river gauge, then bedrock geology at the point
+              alone if nothing else is nearby. The first tier with usable data wins.
+            </p>
+            <p>
+              Every number is a range with a named confidence level, never a single falsely
+              precise figure - and the scoring itself is plain deterministic physics, not a
+              model&apos;s guess. The only place AI is involved is turning a free-text field note
+              into structured data; it never decides a verdict.
+            </p>
+          </Expandable>
+          <Expandable title="How to contribute data">
+            <p>
+              Standing at a real site? Use the on-site field update tool at the bottom of this
+              page - a grain card, settle test or turbidity tube reading (or just describe what
+              you saw) replaces the desk-based estimate for that site immediately,
+              deterministically, no rebuild required.
+            </p>
+            <p className="hint">
+              It works even before a site has been looked up above - a real field reading is the
+              strongest evidence this tool can use.
+            </p>
+          </Expandable>
         </section>
       )}
 
+      {/* ---------- CONTENT PAGE: shown once a reading exists, from a confirmed site or a field reading (Notion card 11, section 2) ---------- */}
       {current && (
         <>
-          <section className={`window-banner ${current.report.usefulWindow ? "window-yes" : "window-no"}`}>
+          {/* b) minimal status bar */}
+          <section className="status-bar enter-animate">
+            {live?.station && (
+              <>
+                <strong>{live.station.name}</strong>
+                <span className="mono">NRFA {live.station.id}</span>
+                {live.station["catchment-area"] && <span>{live.station["catchment-area"]} km² catchment</span>}
+              </>
+            )}
+            {live?.source === "geology-only" && (
+              <>
+                <strong>No NRFA gauge nearby</strong>
+                <span>
+                  reading mapped geology at{" "}
+                  {live.geocode?.matchedOn === "coordinates" ? live.geocode.displayName : `"${live.geocode?.matchedOn}"`}
+                </span>
+              </>
+            )}
+            {!live && fieldResult && <strong>Field reading applied - no site resolved</strong>}
+          </section>
+
+          <section className={`window-banner ${current.report.usefulWindow ? "window-yes" : "window-no"} enter-animate`}>
             {current.report.usefulWindow ? (
               <>
                 <strong>Worth investigating:</strong> membrane ratings from{" "}
@@ -546,7 +549,117 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
             )}
           </section>
 
-          <section>
+          {/* c) split row: findings (left) / download report (right) */}
+          <section className="content-split enter-animate">
+            <div className="content-split-left">
+              {live && (
+                <div className="stat-strip">
+                  {live.siteConcentration && (
+                    <div className="stat-chip">
+                      <span className="eyebrow">EA water quality</span>
+                      <span className="stat-value">{live.siteConcentration.mgL.toFixed(1)} mg/L</span>
+                    </div>
+                  )}
+                  {live.tideState && (
+                    <div className="stat-chip">
+                      <span className="eyebrow">Tide state</span>
+                      <span className="stat-value">
+                        {live.tideState.phase}, {live.tideState.springNeap}
+                      </span>
+                    </div>
+                  )}
+                  {live.satelliteTurbidity && (
+                    <div className="stat-chip">
+                      <span className="eyebrow">Satellite turbidity</span>
+                      <span className="stat-value">NDTI {live.satelliteTurbidity.ndtiMean.toFixed(3)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <Expandable
+                title="Found character"
+                subtitle={live ? undefined : "from field reading"}
+                defaultOpen
+                badge={
+                  live && (
+                    <span className="pill">
+                      {CHARACTER_LABELS[live.characterInference.character]} · {live.characterInference.confidence}
+                    </span>
+                  )
+                }
+              >
+                {live ? (
+                  <ul>
+                    {live.characterInference.reasoning.map((line, i) => (
+                      <li key={`char-${i}`}>{line}</li>
+                    ))}
+                    {live.siteConcentration && <li>EA water quality: {live.siteConcentration.source}</li>}
+                    {live.tideState && (
+                      <li>
+                        Tide: {live.tideState.station.name} tide station,{" "}
+                        {live.tideState.station.distanceKm.toFixed(1)} km away. {live.tideState.reasoning}
+                      </li>
+                    )}
+                    {live.satelliteTurbidity && (
+                      <li>
+                        Satellite turbidity (context only, not scored): {live.satelliteTurbidity.sampleCount} of{" "}
+                        {live.satelliteTurbidity.sampleCount + live.satelliteTurbidity.noDataCount} pixels cloud-free.{" "}
+                        {live.satelliteTurbidity.reasoning}
+                      </li>
+                    )}
+                    {live.source === "geology-only" && live.geocode && live.geocode.matchedOn !== "coordinates" && (
+                      <li>
+                        Anchor point: &quot;{live.geocode.matchedOn}&quot; ({live.geocode.displayName}). For a small
+                        watercourse this is often the nearest settlement, not the water itself - treat this as a
+                        rough starting point.
+                      </li>
+                    )}
+                  </ul>
+                ) : (
+                  <p>{fieldResult?.fieldReasoning.join(" ")}</p>
+                )}
+              </Expandable>
+
+              {live && (
+                <Expandable title="Algae risk" badge={<span className={`pill ${FLAG_RISK_STYLE[live.flags.algae.risk].className}`}>{FLAG_RISK_STYLE[live.flags.algae.risk].label}</span>}>
+                  <p>{live.flags.algae.reasoning}</p>
+                </Expandable>
+              )}
+              {live && (
+                <Expandable
+                  title="Inhibition risk"
+                  badge={<span className={`pill ${FLAG_RISK_STYLE[live.flags.inhibition.risk].className}`}>{FLAG_RISK_STYLE[live.flags.inhibition.risk].label}</span>}
+                >
+                  <p>{live.flags.inhibition.reasoning}</p>
+                </Expandable>
+              )}
+              {fieldResult && fieldResult.additionalContext.length > 0 && (
+                <Expandable title="Additional field context" subtitle="not scored">
+                  <ul>
+                    {fieldResult.additionalContext.map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </ul>
+                </Expandable>
+              )}
+            </div>
+
+            <div className="content-split-right">
+              <span className="eyebrow">Full report</span>
+              <button type="button" className="btn" onClick={() => window.print()}>
+                Download full report
+              </button>
+              <p className="hint">
+                Click the link above to download the full report, which details the verdict, why,
+                what we know, what we don&apos;t know, the recommended test, and the table of
+                configurations.
+              </p>
+            </div>
+          </section>
+
+          {/* d) estimations - the table of configurations, its own full-width row */}
+          <section className="enter-animate">
             <h2>Per membrane: baseline, uplift, recommendation</h2>
             <p className="hint">Click a volume or uplift cell for the full reasoning behind it.</p>
             <table className="grid">
@@ -618,7 +731,7 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
           </section>
 
           {selectedUplift && (
-            <section className="cell-detail">
+            <section className="cell-detail enter-animate">
               <h3>
                 {membranes.find((m) => m.id === selected?.membraneId)?.label} +{" "}
                 {hydrocyclones.find((h) => h.id === selected?.methodId)?.name}
@@ -627,22 +740,37 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
             </section>
           )}
           {!selectedUplift && selectedAssessment && selected && !selected.methodId && (
-            <section className="cell-detail">
+            <section className="cell-detail enter-animate">
               <h3>{membranes.find((m) => m.id === selected.membraneId)?.label} - baseline</h3>
               <p>{selectedAssessment.baselineReasoning}</p>
             </section>
           )}
 
-          <section>
-            <button type="button" className="expand-toggle" onClick={() => setExpanded(!expanded)}>
-              {expanded ? "Hide full report ▲" : "Show full report ▼"}
-            </button>
+          {/* f) placeholder for a future chat-about-this-result feature */}
+          <section className="chat-placeholder enter-animate">
+            <h2>
+              Chat about this result <span className="badge-soon">Coming soon</span>
+            </h2>
+            <p className="hint">Ask questions about this report in plain language - not built yet.</p>
+            <div className="chat-placeholder-box">
+              <input type="text" disabled placeholder="Ask about this result..." />
+              <button type="button" className="btn" disabled>
+                Send
+              </button>
+            </div>
           </section>
 
-          {expanded && (
-            <section className="full-report">
-              <h2>Full report</h2>
+          {/* Hidden on screen, shown only when printing - what "Download full report" produces. */}
+          <div className="printable-report">
+            <div className="printable-header">
+              <div>
+                <strong>Site Suitability Tool</strong> - full report
+                <div>{siteLabel()}</div>
+              </div>
+              <div>{new Date().toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" })}</div>
+            </div>
 
+            <div className="full-report">
               <h3>Verdict</h3>
               <p>{current.report.verdict}</p>
 
@@ -691,11 +819,18 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
                   )}
                 </tbody>
               </table>
-            </section>
-          )}
+            </div>
+
+            <div className="printable-footer">
+              Preliminary engineering screening only - not process design, equipment selection, or
+              a guarantee of membrane performance.
+            </div>
+          </div>
         </>
       )}
 
+      {/* e) on-site field data - deliberately NOT gated to the content page: a real field reading
+          must work standalone, even with no site resolved above (see current's doc comment). */}
       <details className="field-update-section" open={Boolean(fieldResult)}>
         <summary>On-site field update</summary>
         <p className="field-update-sub">
@@ -804,18 +939,6 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
                 <li key={i}>{line}</li>
               ))}
             </ul>
-            {fieldResult.additionalContext.length > 0 && (
-              <>
-                <p className="hint">Additional context (not scored):</p>
-                <ul>
-                  {fieldResult.additionalContext.map((line, i) => (
-                    <li key={i} className="hint">
-                      {line}
-                    </li>
-                  ))}
-                </ul>
-              </>
-            )}
           </div>
         )}
       </details>
