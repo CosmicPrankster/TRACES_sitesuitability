@@ -625,7 +625,6 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
               <Expandable
                 title="Found character"
                 subtitle={live ? undefined : "from field reading"}
-                defaultOpen
                 badge={
                   live && (
                     <span className="pill">
