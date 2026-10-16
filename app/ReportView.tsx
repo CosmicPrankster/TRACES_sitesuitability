@@ -180,10 +180,66 @@ function Expandable({
   );
 }
 
+const TITLE_SECTIONS: { title: string; content: React.ReactNode }[] = [
+  {
+    title: "What it is",
+    content: (
+      <>
+        <p>
+          A screening tool for UK river, stream or other waterbody sites: how much water a
+          membrane filter is likely to pass before it blinds, with and without hydrocyclone
+          pre-treatment, before any equipment is bought or a bench trial is run.
+        </p>
+        <p>
+          It combines live geology, measured water-quality, tide and satellite readings for the
+          site you enter with real site trial data where it exists - and says plainly when it
+          doesn&apos;t have enough to give a confident answer, rather than guessing.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: "How it works",
+    content: (
+      <>
+        <p>
+          Evidence is read in priority order, strongest first: a real on-site reading, then
+          measured water quality nearby, then satellite turbidity on larger rivers, then catchment
+          geology from the nearest river gauge, then bedrock geology at the point alone if nothing
+          else is nearby. The first tier with usable data wins.
+        </p>
+        <p>
+          Every number is a range with a named confidence level, never a single falsely precise
+          figure - and the scoring itself is plain deterministic physics, not a model&apos;s
+          guess. The only place AI is involved is turning a free-text field note into structured
+          data; it never decides a verdict.
+        </p>
+      </>
+    ),
+  },
+  {
+    title: "How to contribute data",
+    content: (
+      <>
+        <p>
+          Standing at a real site? Use the on-site field update tool below - a grain card, settle
+          test or turbidity tube reading (or just describe what you saw) replaces the desk-based
+          estimate for that site immediately, deterministically, no rebuild required.
+        </p>
+        <p className="hint">
+          It works even before a site has been looked up above - a real field reading is the
+          strongest evidence this tool can use.
+        </p>
+      </>
+    ),
+  },
+];
+
 export default function ReportView({ hydrocyclones, membranes }: Props) {
   const [query, setQuery] = useState("");
   const [flow, setFlow] = useState<FlowState>({ phase: "idle" });
   const [selected, setSelected] = useState<SelectedDetail | null>(null);
+  const [titleOpen, setTitleOpen] = useState<number | null>(0);
 
   const [fieldUpdate, setFieldUpdate] = useState<FieldUpdateState>({ phase: "idle" });
   const [grainCardClass, setGrainCardClass] = useState("");
@@ -467,47 +523,36 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
         </section>
       )}
 
-      {/* ---------- TITLE PAGE: shown until something is resolved (Notion card 11, section 1) ---------- */}
+      {/* ---------- TITLE PAGE: shown until something is resolved (Notion card 11, section 1) ----------
+          Three boxes sit in one row; opening one expands its panel across the full row below,
+          rather than stacking three independently-expanding boxes. */}
       {!current && (
-        <section className="homepage-placeholder enter-animate">
-          <Expandable title="What it is" defaultOpen>
-            <p>
-              A screening tool for UK river, stream or other waterbody sites: how much water a
-              membrane filter is likely to pass before it blinds, with and without hydrocyclone
-              pre-treatment, before any equipment is bought or a bench trial is run.
-            </p>
-            <p>
-              It combines live geology, measured water-quality, tide and satellite readings for
-              the site you enter with real site trial data where it exists - and says plainly
-              when it doesn&apos;t have enough to give a confident answer, rather than guessing.
-            </p>
-          </Expandable>
-          <Expandable title="How it works">
-            <p>
-              Evidence is read in priority order, strongest first: a real on-site reading, then
-              measured water quality nearby, then satellite turbidity on larger rivers, then
-              catchment geology from the nearest river gauge, then bedrock geology at the point
-              alone if nothing else is nearby. The first tier with usable data wins.
-            </p>
-            <p>
-              Every number is a range with a named confidence level, never a single falsely
-              precise figure - and the scoring itself is plain deterministic physics, not a
-              model&apos;s guess. The only place AI is involved is turning a free-text field note
-              into structured data; it never decides a verdict.
-            </p>
-          </Expandable>
-          <Expandable title="How to contribute data">
-            <p>
-              Standing at a real site? Use the on-site field update tool at the bottom of this
-              page - a grain card, settle test or turbidity tube reading (or just describe what
-              you saw) replaces the desk-based estimate for that site immediately,
-              deterministically, no rebuild required.
-            </p>
-            <p className="hint">
-              It works even before a site has been looked up above - a real field reading is the
-              strongest evidence this tool can use.
-            </p>
-          </Expandable>
+        <section className="title-row-wrap enter-animate">
+          <div className="title-row">
+            {TITLE_SECTIONS.map((s, i) => (
+              <button
+                key={s.title}
+                type="button"
+                className={`title-row-trigger ${titleOpen === i ? "title-row-trigger-active" : ""}`}
+                onClick={() => setTitleOpen(titleOpen === i ? null : i)}
+                aria-expanded={titleOpen === i}
+              >
+                {s.title}
+                <span className="expandable-chevron" aria-hidden="true">
+                  ▾
+                </span>
+              </button>
+            ))}
+          </div>
+          <div className={`title-row-panel ${titleOpen !== null ? "title-row-panel-open" : ""}`}>
+            <div className="title-row-panel-inner">
+              {titleOpen !== null && (
+                <div key={titleOpen} className="enter-animate">
+                  {TITLE_SECTIONS[titleOpen].content}
+                </div>
+              )}
+            </div>
+          </div>
         </section>
       )}
 
@@ -685,7 +730,7 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
                       <td>
                         <button
                           type="button"
-                          className={`cell ${a.baselineVolume ? "cell-strong" : "cell-insufficient"} ${baselineSelected ? "cell-selected" : ""}`}
+                          className={`cell ${a.baselineVolume ? "cell-neutral" : "cell-insufficient"} ${baselineSelected ? "cell-selected" : ""}`}
                           onClick={() => setSelected(baselineSelected ? null : { membraneId: m.id })}
                         >
                           {a.baselineVolume ? (
@@ -745,92 +790,12 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
               <p>{selectedAssessment.baselineReasoning}</p>
             </section>
           )}
-
-          {/* f) placeholder for a future chat-about-this-result feature */}
-          <section className="chat-placeholder enter-animate">
-            <h2>
-              Chat about this result <span className="badge-soon">Coming soon</span>
-            </h2>
-            <p className="hint">Ask questions about this report in plain language - not built yet.</p>
-            <div className="chat-placeholder-box">
-              <input type="text" disabled placeholder="Ask about this result..." />
-              <button type="button" className="btn" disabled>
-                Send
-              </button>
-            </div>
-          </section>
-
-          {/* Hidden on screen, shown only when printing - what "Download full report" produces. */}
-          <div className="printable-report">
-            <div className="printable-header">
-              <div>
-                <strong>Site Suitability Tool</strong> - full report
-                <div>{siteLabel()}</div>
-              </div>
-              <div>{new Date().toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" })}</div>
-            </div>
-
-            <div className="full-report">
-              <h3>Verdict</h3>
-              <p>{current.report.verdict}</p>
-
-              <h3>Why</h3>
-              <p>{current.report.why}</p>
-
-              <h3>What we know</h3>
-              <ul>
-                {current.report.whatWeKnow.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
-
-              <h3>What we don&apos;t know</h3>
-              <ul>
-                {current.report.whatWeDontKnow.map((line, i) => (
-                  <li key={i}>{line}</li>
-                ))}
-              </ul>
-
-              <h3>Recommended test</h3>
-              <p>{current.report.recommendedTest}</p>
-
-              <h3>Every configuration tested</h3>
-              <table className="config-list">
-                <thead>
-                  <tr>
-                    <th>Membrane</th>
-                    <th>Method</th>
-                    <th>Category</th>
-                    <th>Uplift</th>
-                    <th>Confidence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {current.assessments.flatMap((a) =>
-                    a.uplifts.map((u, i) => (
-                      <tr key={`${a.membraneId}-${u.methodId}-${i}`}>
-                        <td>{membranes.find((m) => m.id === a.membraneId)?.label}</td>
-                        <td>{u.methodLabel}</td>
-                        <td>{CATEGORY_STYLE[u.category].label}</td>
-                        <td>{Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}</td>
-                        <td>{u.confidence}</td>
-                      </tr>
-                    )),
-                  )}
-                </tbody>
-              </table>
-            </div>
-
-            <div className="printable-footer">
-              Preliminary engineering screening only - not process design, equipment selection, or
-              a guarantee of membrane performance.
-            </div>
-          </div>
         </>
       )}
 
       {/* e) on-site field data - deliberately NOT gated to the content page: a real field reading
-          must work standalone, even with no site resolved above (see current's doc comment). */}
+          must work standalone, even with no site resolved above (see current's doc comment).
+          Placed before the chat placeholder (f), consistent with the content-page row order. */}
       <details className="field-update-section" open={Boolean(fieldResult)}>
         <summary>On-site field update</summary>
         <p className="field-update-sub">
@@ -942,6 +907,91 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
           </div>
         )}
       </details>
+
+      {current && (
+        <>
+          {/* f) placeholder for a future chat-about-this-result feature */}
+          <section className="chat-placeholder enter-animate">
+            <h2>
+              Chat about this result <span className="badge-soon">Coming soon</span>
+            </h2>
+            <p className="hint">Ask questions about this report in plain language - not built yet.</p>
+            <div className="chat-placeholder-box">
+              <input type="text" disabled placeholder="Ask about this result..." />
+              <button type="button" className="btn" disabled>
+                Send
+              </button>
+            </div>
+          </section>
+
+          {/* Hidden on screen, shown only when printing - what "Download full report" produces. */}
+          <div className="printable-report">
+            <div className="printable-header">
+              <div>
+                <strong>Site Suitability Tool</strong> - full report
+                <div>{siteLabel()}</div>
+              </div>
+              <div>{new Date().toLocaleDateString("en-GB", { year: "numeric", month: "long", day: "numeric" })}</div>
+            </div>
+
+            <div className="full-report">
+              <h3>Verdict</h3>
+              <p>{current.report.verdict}</p>
+
+              <h3>Why</h3>
+              <p>{current.report.why}</p>
+
+              <h3>What we know</h3>
+              <ul>
+                {current.report.whatWeKnow.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+
+              <h3>What we don&apos;t know</h3>
+              <ul>
+                {current.report.whatWeDontKnow.map((line, i) => (
+                  <li key={i}>{line}</li>
+                ))}
+              </ul>
+
+              <h3>Recommended test</h3>
+              <p>{current.report.recommendedTest}</p>
+
+              <h3>Every configuration tested</h3>
+              <table className="config-list">
+                <thead>
+                  <tr>
+                    <th>Membrane</th>
+                    <th>Method</th>
+                    <th>Category</th>
+                    <th>Uplift</th>
+                    <th>Confidence</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {current.assessments.flatMap((a) =>
+                    a.uplifts.map((u, i) => (
+                      <tr key={`${a.membraneId}-${u.methodId}-${i}`}>
+                        <td>{membranes.find((m) => m.id === a.membraneId)?.label}</td>
+                        <td>{u.methodLabel}</td>
+                        <td>{CATEGORY_STYLE[u.category].label}</td>
+                        <td>{Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}</td>
+                        <td>{u.confidence}</td>
+                      </tr>
+                    )),
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div className="printable-footer">
+              Preliminary engineering screening only - not process design, equipment selection, or
+              a guarantee of membrane performance.
+            </div>
+          </div>
+        </>
+      )}
 
       <footer className="page-footer">
         Do not enter confidential or commercially sensitive information. Runs are logged to this
