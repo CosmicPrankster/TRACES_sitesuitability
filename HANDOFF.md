@@ -410,6 +410,75 @@ that regression. The "chat about this result" placeholder (f) IS gated to
 the content page, since chatting about a result that doesn't exist yet has
 no meaning.
 
+## Scope change (2026-11-23): hydrocyclone uplift dropped from the page and the report
+
+Explicit user instruction: "remove the hydrocyclone uplift from the page.
+we will only be focussing on how much volume can pass through a filter
+from this point." Taken at face value first (just the UI table/print
+config-list), then widened once the result was checked: the
+browser-printed "full report" still said "Pretreatment looks worthwhile
+for membrane ratings from 10 to 20 µm" and told the reader to compare
+against hydrocyclone overflow, straight from `lib/report.ts`'s old
+pretreatment-framed text generation - a real inconsistency between what
+the page shows and what the PDF it generates says. Asked, and the user
+confirmed: rewrite the report text too.
+
+What changed:
+- `app/ReportView.tsx` - the per-membrane table lost its uplift columns
+  and the uplift-derived "Recommendation" column (filter-alone/more-
+  replicates/pretreatment/sample-sediment is entirely an uplift comparison
+  - showing it with no uplift data behind it would be worse than showing
+  neither). The uplift cell-detail panel is gone; only the baseline-volume
+  detail panel remains. The printed report's "Every configuration tested"
+  table is gone. `hydrocyclones` is no longer a prop at all - `page.tsx`
+  stopped loading it.
+- `lib/report.ts` - **rewritten**, not just re-worded. `findUsefulWindow`/
+  `UsefulWindow` ("the band where pretreatment is worthwhile") is deleted
+  outright, not repurposed: there is no threshold anywhere in this
+  project's real data for how many mL of filter-alone volume counts as
+  "enough" on its own, and inventing one to keep a verdict banner alive
+  would be exactly the false-precision mistake this project's own rules
+  forbid (see "Rules this project runs on"). `verdict` is now a plain
+  factual summary (range of baseline volumes found, how many of N
+  membranes have a figure at all, measured-vs-estimated split). `why`
+  explains the Carman-Kozeny physics in filter-only terms (why a tighter
+  membrane's volume drops faster than its retained-mass difference alone
+  would suggest) instead of explaining pretreatment effectiveness.
+  `recommendedTest` now recommends a plain filtration trial at the
+  weakest-calibrated membrane, or a measured site concentration once every
+  membrane has a real calibration - never a hydrocyclone-overflow
+  comparison. `buildWhatWeKnow`/`buildWhatWeDontKnow` needed **no**
+  changes - they were already filter-only, which is itself worth noting:
+  the uplift framing had crept into the verdict/why/recommended-test
+  functions specifically, not the whole report.
+- `app/globals.css` - `.window-banner` lost its `.window-yes`/`.window-no`
+  green/red variants; it's a single neutral style now, same reasoning as
+  the baseline-cell colour fix two rounds ago (no threshold to colour-code
+  against any more).
+- `tests/report.test.ts` - rewritten to match; also asserts the new verdict
+  and recommended-test text never contain the words "pretreatment",
+  "hydrocyclone" or "overflow".
+
+What deliberately did NOT change: `lib/assessment.ts`'s `assessUplift`/
+`recommend`/`MembraneAssessment.uplifts`/`.recommendation` - the uplift
+computation and the hydrocyclone grade-efficiency physics are real, tested,
+and kept exactly as before (see the module's own header comment, updated to
+say so explicitly). Nothing reads or surfaces either one any more, but nothing
+was torn out either - ripping out the data model, the API routes' shared
+`assessSite` signature, and every test that exercises it would have been a
+far larger change than "remove it from the page," and the physics itself was
+never the problem (see the validation-loop finding above - it's unvalidated,
+not wrong on its face).
+
+**Known follow-up, not done here:** `README.md`'s worked example and
+architecture notes still describe the old hydrocyclone-uplift report format
+verbatim (the `+ 5mm hydrocyclone: 1.50x` table, "Verdict: pretreatment
+looks worthwhile..."). That's project documentation for a human reader, not
+live report text, so it was left alone this round rather than folded into
+an already-large change - but it is now stale against what the tool
+actually outputs, and should be rewritten to match before anyone next reads
+it looking for an accurate worked example.
+
 ## Reservations — be honest about these with the user
 
 **The cut sizes are guesses, and the validation loop now shows by how much

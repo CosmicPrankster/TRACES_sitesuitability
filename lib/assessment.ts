@@ -43,6 +43,13 @@ export interface SiteIdentity {
  * 5d: mass removed is not fouling removed (Carman-Kozeny, 1/d^2), and
  * volume scales as 1/sqrt(fouling load). What changed is the framing: a
  * multiplier ON TOP OF a real baseline, not a free-standing ratio.
+ *
+ * 2026-11-23: per explicit user instruction, neither `uplifts` nor
+ * `recommendation` is read by lib/report.ts or shown on the page any more -
+ * the tool is scoped to filter-alone baseline volume only now. Kept here
+ * deliberately rather than deleted: this is real, tested physics (see
+ * HANDOFF.md's "Scope change" entry), and ripping out the data model would
+ * be a far larger change than removing it from what's displayed.
  */
 
 export type Category = "likely" | "marginal" | "unlikely";

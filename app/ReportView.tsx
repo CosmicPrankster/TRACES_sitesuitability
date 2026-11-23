@@ -4,14 +4,9 @@ import { useState } from "react";
 import type { ParticleCharacter, CharacterInference } from "@/lib/character";
 import type { Resolution, StationMatch } from "@/lib/resolve";
 import type { Psd } from "@/lib/psd";
-import type { Category, MembraneAssessment, UpliftResult } from "@/lib/assessment";
+import type { MembraneAssessment } from "@/lib/assessment";
 import type { ScreeningReport } from "@/lib/report";
 import type { SiteFlags } from "@/lib/flags";
-
-interface HydrocycloneRef {
-  id: string;
-  name: string;
-}
 
 interface MembraneRef {
   id: string;
@@ -20,7 +15,6 @@ interface MembraneRef {
 }
 
 interface Props {
-  hydrocyclones: HydrocycloneRef[];
   membranes: MembraneRef[];
 }
 
@@ -87,31 +81,11 @@ const CHARACTER_LABELS: Record<ParticleCharacter, string> = {
   clay: "Clay",
 };
 
-const CATEGORY_STYLE: Record<Category | "insufficient-data", { label: string; className: string }> = {
-  likely: { label: "Likely", className: "cell-strong" },
-  marginal: { label: "Marginal", className: "cell-marginal" },
-  unlikely: { label: "Unlikely", className: "cell-unlikely" },
-  "insufficient-data": { label: "No data", className: "cell-insufficient" },
-};
-
 const FLAG_RISK_STYLE: Record<SiteFlags["algae"]["risk"], { label: string; className: string }> = {
   elevated: { label: "Elevated", className: "stat-marginal" },
   low: { label: "Low", className: "stat-strong" },
   "insufficient-data": { label: "No data", className: "stat-insufficient" },
 };
-
-const RECOMMENDATION_LABEL: Record<string, string> = {
-  "filter-alone": "Filter alone",
-  "more-replicates": "Run more replicates",
-  pretreatment: "Use pretreatment",
-  "sample-sediment": "Sample sediment first",
-};
-
-interface SelectedDetail {
-  membraneId: string;
-  /** undefined selects the baseline; set selects one method's uplift. */
-  methodId?: string;
-}
 
 const GRAIN_CARD_OPTIONS: { value: string; label: string }[] = [
   { value: "", label: "Not observed" },
@@ -187,8 +161,8 @@ const TITLE_SECTIONS: { title: string; content: React.ReactNode }[] = [
       <>
         <p>
           A screening tool for UK river, stream or other waterbody sites: how much water a
-          membrane filter is likely to pass before it blinds, with and without hydrocyclone
-          pre-treatment, before any equipment is bought or a bench trial is run.
+          membrane filter is likely to pass before it blinds, before any equipment is bought or a
+          bench trial is run.
         </p>
         <p>
           It combines live geology, measured water-quality, tide and satellite readings for the
@@ -235,10 +209,11 @@ const TITLE_SECTIONS: { title: string; content: React.ReactNode }[] = [
   },
 ];
 
-export default function ReportView({ hydrocyclones, membranes }: Props) {
+export default function ReportView({ membranes }: Props) {
   const [query, setQuery] = useState("");
   const [flow, setFlow] = useState<FlowState>({ phase: "idle" });
-  const [selected, setSelected] = useState<SelectedDetail | null>(null);
+  /** The membrane whose baseline-volume cell is expanded, or null. */
+  const [selected, setSelected] = useState<string | null>(null);
   const [titleOpen, setTitleOpen] = useState<number | null>(0);
 
   const [fieldUpdate, setFieldUpdate] = useState<FieldUpdateState>({ phase: "idle" });
@@ -348,11 +323,7 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
   }
 
   const assessmentFor = (membraneId: string) => current!.assessments.find((a) => a.membraneId === membraneId)!;
-  const selectedAssessment = selected && current ? assessmentFor(selected.membraneId) : null;
-  const selectedUplift: UpliftResult | null =
-    selected?.methodId && selectedAssessment
-      ? selectedAssessment.uplifts.find((u) => u.methodId === selected.methodId) ?? null
-      : null;
+  const selectedAssessment = selected && current ? assessmentFor(selected) : null;
 
   async function lookUp() {
     if (!query.trim()) return;
@@ -580,19 +551,7 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
             {!live && fieldResult && <strong>Field reading applied - no site resolved</strong>}
           </section>
 
-          <section className={`window-banner ${current.report.usefulWindow ? "window-yes" : "window-no"} enter-animate`}>
-            {current.report.usefulWindow ? (
-              <>
-                <strong>Worth investigating:</strong> membrane ratings from{" "}
-                {current.report.usefulWindow.fromPoreSizeUm} to {current.report.usefulWindow.toPoreSizeUm} µm.
-              </>
-            ) : (
-              <>
-                <strong>Not worth investigating yet</strong> at any membrane rating tested for this
-                solids character.
-              </>
-            )}
-          </section>
+          <section className="window-banner enter-animate">{current.report.verdict}</section>
 
           {/* c) split row: findings (left) / download report (right) */}
           <section className="content-split enter-animate">
@@ -696,41 +655,36 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
               </button>
               <p className="hint">
                 Click the link above to download the full report, which details the verdict, why,
-                what we know, what we don&apos;t know, the recommended test, and the table of
-                configurations.
+                what we know, what we don&apos;t know, and the recommended test.
               </p>
             </div>
           </section>
 
-          {/* d) estimations - the table of configurations, its own full-width row */}
+          {/* d) estimations - filterable volume per membrane, its own full-width row.
+              Hydrocyclone uplift and the pretreatment recommendation derived from it are
+              deliberately not shown here - this page is scoped to filter throughput alone. */}
           <section className="enter-animate">
-            <h2>Per membrane: baseline, uplift, recommendation</h2>
-            <p className="hint">Click a volume or uplift cell for the full reasoning behind it.</p>
+            <h2>Per membrane: filterable volume</h2>
+            <p className="hint">Click a cell for the full reasoning behind it.</p>
             <table className="grid">
               <thead>
                 <tr>
                   <th scope="col">Membrane</th>
                   <th scope="col">Baseline volume (filter alone)</th>
-                  {hydrocyclones.map((h) => (
-                    <th scope="col" key={h.id}>
-                      {h.name} uplift
-                    </th>
-                  ))}
-                  <th scope="col">Recommendation</th>
                 </tr>
               </thead>
               <tbody>
                 {membranes.map((m) => {
                   const a = assessmentFor(m.id);
-                  const baselineSelected = selected?.membraneId === m.id && !selected.methodId;
+                  const isSelected = selected === m.id;
                   return (
                     <tr key={m.id}>
                       <th scope="row">{m.label}</th>
                       <td>
                         <button
                           type="button"
-                          className={`cell ${a.baselineVolume ? "cell-neutral" : "cell-insufficient"} ${baselineSelected ? "cell-selected" : ""}`}
-                          onClick={() => setSelected(baselineSelected ? null : { membraneId: m.id })}
+                          className={`cell ${a.baselineVolume ? "cell-neutral" : "cell-insufficient"} ${isSelected ? "cell-selected" : ""}`}
+                          onClick={() => setSelected(isSelected ? null : m.id)}
                         >
                           {a.baselineVolume ? (
                             <>
@@ -747,26 +701,6 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
                           )}
                         </button>
                       </td>
-                      {hydrocyclones.map((h) => {
-                        const u = a.uplifts.find((x) => x.methodId === h.id)!;
-                        const style = CATEGORY_STYLE[u.category];
-                        const isSelected = selected?.membraneId === m.id && selected?.methodId === h.id;
-                        return (
-                          <td key={h.id}>
-                            <button
-                              type="button"
-                              className={`cell ${style.className} ${isSelected ? "cell-selected" : ""}`}
-                              onClick={() => setSelected(isSelected ? null : { membraneId: m.id, methodId: h.id })}
-                            >
-                              <span className="cell-verdict">{style.label}</span>
-                              <span className="cell-ratio">
-                                {Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}
-                              </span>
-                            </button>
-                          </td>
-                        );
-                      })}
-                      <td>{RECOMMENDATION_LABEL[a.recommendation.kind]}</td>
                     </tr>
                   );
                 })}
@@ -774,18 +708,9 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
             </table>
           </section>
 
-          {selectedUplift && (
+          {selectedAssessment && (
             <section className="cell-detail enter-animate">
-              <h3>
-                {membranes.find((m) => m.id === selected?.membraneId)?.label} +{" "}
-                {hydrocyclones.find((h) => h.id === selected?.methodId)?.name}
-              </h3>
-              <p>{selectedUplift.reasoning}</p>
-            </section>
-          )}
-          {!selectedUplift && selectedAssessment && selected && !selected.methodId && (
-            <section className="cell-detail enter-animate">
-              <h3>{membranes.find((m) => m.id === selected.membraneId)?.label} - baseline</h3>
+              <h3>{membranes.find((m) => m.id === selected)?.label} - baseline</h3>
               <p>{selectedAssessment.baselineReasoning}</p>
             </section>
           )}
@@ -956,32 +881,6 @@ export default function ReportView({ hydrocyclones, membranes }: Props) {
 
               <h3>Recommended test</h3>
               <p>{current.report.recommendedTest}</p>
-
-              <h3>Every configuration tested</h3>
-              <table className="config-list">
-                <thead>
-                  <tr>
-                    <th>Membrane</th>
-                    <th>Method</th>
-                    <th>Category</th>
-                    <th>Uplift</th>
-                    <th>Confidence</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {current.assessments.flatMap((a) =>
-                    a.uplifts.map((u, i) => (
-                      <tr key={`${a.membraneId}-${u.methodId}-${i}`}>
-                        <td>{membranes.find((m) => m.id === a.membraneId)?.label}</td>
-                        <td>{u.methodLabel}</td>
-                        <td>{CATEGORY_STYLE[u.category].label}</td>
-                        <td>{Number.isFinite(u.multiplier.mid) ? `${u.multiplier.mid.toFixed(2)}x` : "-"}</td>
-                        <td>{u.confidence}</td>
-                      </tr>
-                    )),
-                  )}
-                </tbody>
-              </table>
             </div>
 
             <div className="printable-footer">

@@ -804,28 +804,17 @@ main {
   margin-top: 0.25rem;
 }
 
+/* Factual summary, not a verdict - no good/bad colour, since there is no
+   defined threshold for how much filterable volume counts as "enough". */
 .window-banner {
   border-radius: 6px;
   padding: 1.1rem 1.25rem;
   margin-bottom: 1.75rem;
   font-family: var(--font-serif), serif;
   font-size: 1.1rem;
-}
-
-.window-banner strong {
-  font-weight: 600;
-}
-
-.window-yes {
-  background: var(--strong-bg);
-  color: var(--strong);
-  border: 1px solid var(--strong);
-}
-
-.window-no {
-  background: var(--unlikely-bg);
-  color: var(--unlikely);
-  border: 1px solid var(--unlikely);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
 }
 
 h2 {

@@ -3,55 +3,27 @@ import type { Psd } from "./psd";
 import type { MembraneAssessment } from "./assessment";
 
 /**
- * BLOCK 5e, REBUILT (rebuild phase 1) - the report.
+ * BLOCK 5e, REBUILT AGAIN (2026-11-23) - the report, filter-throughput only.
  *
- * Built around the new per-membrane shape from lib/assessment.ts: a
- * baseline volume (or honestly "insufficient data"), every pretreatment
- * method's uplift, and a recommendation. The USEFUL WINDOW concept from
- * the original report survives, redefined against the new output: the
- * contiguous band of membrane ratings where the recommendation is actually
- * to use a pretreatment method (not filter alone, not sample sediment).
+ * Per the user's explicit instruction, this project is no longer scoring or
+ * reporting hydrocyclone uplift at all - only how much volume a membrane
+ * filter alone can pass before it blinds. `lib/assessment.ts` still computes
+ * `uplifts`/`recommendation` internally (real, tested physics, kept rather
+ * than torn out - see HANDOFF.md), but nothing in this report, and nothing
+ * on the page, reads or surfaces either one any more.
+ *
+ * The old `findUsefulWindow`/`usefulWindow` concept ("the band where
+ * pretreatment is worthwhile") is gone, not repurposed: there is no
+ * threshold anywhere in this project's real data for how many mL of
+ * filter-alone volume counts as "enough" - inventing one to keep a verdict
+ * banner alive would be exactly the kind of false precision this project's
+ * own rules forbid. The verdict is now a plain factual summary of what was
+ * found, and the recommended test is whatever would most directly replace
+ * an estimate with a real measurement.
  */
-
-export interface UsefulWindow {
-  membraneIds: string[];
-  fromPoreSizeUm: number;
-  toPoreSizeUm: number;
-}
-
-/**
- * The widest contiguous run of membrane ratings (ascending pore size)
- * where the recommendation is a pretreatment method. A membrane
- * recommending filter-alone, more-replicates or sample-sediment breaks the
- * run - those are not "pretreatment looks worthwhile" outcomes.
- */
-export function findUsefulWindow(assessments: MembraneAssessment[], membranes: Membrane[]): UsefulWindow | null {
-  const sorted = [...membranes].sort((a, b) => a.poreSizeUm - b.poreSizeUm);
-  const byMembraneId = new Map(assessments.map((a) => [a.membraneId, a]));
-
-  let bestRun: Membrane[] = [];
-  let currentRun: Membrane[] = [];
-  for (const m of sorted) {
-    const recommendsPretreatment = byMembraneId.get(m.id)?.recommendation.kind === "pretreatment";
-    if (recommendsPretreatment) {
-      currentRun.push(m);
-      if (currentRun.length > bestRun.length) bestRun = currentRun;
-    } else {
-      currentRun = [];
-    }
-  }
-
-  if (bestRun.length === 0) return null;
-  return {
-    membraneIds: bestRun.map((m) => m.id),
-    fromPoreSizeUm: bestRun[0].poreSizeUm,
-    toPoreSizeUm: bestRun[bestRun.length - 1].poreSizeUm,
-  };
-}
 
 export interface ScreeningReport {
   verdict: string;
-  usefulWindow: UsefulWindow | null;
   why: string;
   whatWeKnow: string[];
   whatWeDontKnow: string[];
@@ -60,25 +32,42 @@ export interface ScreeningReport {
 }
 
 export function buildReport(psd: Psd, assessments: MembraneAssessment[], membranes: Membrane[]): ScreeningReport {
-  const window = findUsefulWindow(assessments, membranes);
   const membraneById = new Map(membranes.map((m) => [m.id, m]));
-  const pretreatmentCount = assessments.filter((a) => a.recommendation.kind === "pretreatment").length;
-
-  const verdict = window
-    ? `Pretreatment looks worthwhile for membrane ratings from ${window.fromPoreSizeUm} to ${window.toPoreSizeUm} µm (of ${membranes.length} tested).`
-    : pretreatmentCount > 0
-      ? `Pretreatment looks worthwhile for some membrane ratings, but not a contiguous band - see each membrane's own recommendation.`
-      : `No membrane rating currently recommends a pretreatment method for this feed.`;
-
-  const why = window
-    ? `Removing what a pretreatment method can catch cuts the fouling load enough, in the ${window.fromPoreSizeUm}-${window.toPoreSizeUm} µm band, to plausibly reach this project's "likely" threshold. Outside that band, either too little of the feed is coarse enough to be worth removing, or what is coarse enough is too small a share of the fouling load to move the number.`
-    : `Nowhere does removing the coarse fraction plausibly cut the fouling load far enough - remember volume scales as 1/sqrt(load), so even a 50% mass removal usually buys nowhere near a 50% volume gain. This is the expected outcome for a fine or clay-dominated feed, not a sign the model is broken.`;
-
+  const verdict = buildVerdict(assessments);
+  const why = buildWhy(assessments);
   const whatWeKnow = buildWhatWeKnow(psd, assessments, membraneById);
   const whatWeDontKnow = buildWhatWeDontKnow(psd, assessments);
   const recommendedTest = buildRecommendedTest(assessments, membraneById);
 
-  return { verdict, usefulWindow: window, why, whatWeKnow, whatWeDontKnow, recommendedTest, assessments };
+  return { verdict, why, whatWeKnow, whatWeDontKnow, recommendedTest, assessments };
+}
+
+function buildVerdict(assessments: MembraneAssessment[]): string {
+  const withVolume = assessments.filter((a) => a.baselineVolume);
+  if (withVolume.length === 0) {
+    return "No real bench-trial calibration or literature-based estimate exists for any membrane rating tested - there is no baseline filterable volume to report yet.";
+  }
+  const lowMl = Math.min(...withVolume.map((a) => a.baselineVolume!.lowMl));
+  const highMl = Math.max(...withVolume.map((a) => a.baselineVolume!.highMl));
+  const measuredCount = withVolume.filter((a) => a.baselineSource === "measured").length;
+  const estimatedCount = withVolume.filter((a) => a.baselineSource === "estimated").length;
+  const coverage =
+    estimatedCount === 0
+      ? `all ${measuredCount} backed by a real bench-trial calibration`
+      : measuredCount === 0
+        ? `all ${estimatedCount} a literature-based estimate, not a measurement`
+        : `${measuredCount} with a real bench-trial calibration, ${estimatedCount} a literature-based estimate`;
+  return `Baseline filterable volume ranges from ${lowMl.toFixed(0)} to ${highMl.toFixed(0)} mL across the ${withVolume.length} of ${assessments.length} membrane ratings with a figure at all (${coverage}).`;
+}
+
+function buildWhy(assessments: MembraneAssessment[]): string {
+  const withVolume = assessments
+    .filter((a) => a.baselineVolume)
+    .sort((a, b) => a.baselineVolume!.midMl - b.baselineVolume!.midMl);
+  if (withVolume.length < 2) {
+    return "This model's physics (Carman-Kozeny cake filtration) treats a membrane's retained mass as a fouling load weighted by 1/d², not the mass itself - and filtered volume scales as 1/sqrt(load). A tighter membrane retains more of the feed, which this relationship turns into a much steeper drop in volume than the extra retained mass alone would suggest.";
+  }
+  return `The same physics explains the spread across pore sizes: a tighter membrane rating retains more of the feed, and because this model's physics (Carman-Kozeny) weights retained mass by 1/d² to get the fouling load, a small increase in retained mass becomes a much larger increase in fouling load - and because filtered volume scales as 1/sqrt(load), that turns into the gap seen here between the tightest and widest ratings tested.`;
 }
 
 function buildWhatWeKnow(psd: Psd, assessments: MembraneAssessment[], membraneById: Map<string, Membrane>): string[] {
@@ -129,12 +118,19 @@ function buildWhatWeDontKnow(psd: Psd, assessments: MembraneAssessment[]): strin
 }
 
 function buildRecommendedTest(assessments: MembraneAssessment[], membraneById: Map<string, Membrane>): string {
-  const pretreatmentWins = assessments.filter((a) => a.recommendation.kind === "pretreatment");
-  if (pretreatmentWins.length === 0) {
-    return "Nothing in this assessment recommends a pretreatment method yet, so the cheapest useful step is not a filtration trial - it is a measured particle size distribution of the raw water, to check whether the guessed solids character is actually right before ruling pretreatment out.";
+  const uncalibrated = assessments.find((a) => a.baselineSource !== "measured");
+  if (uncalibrated) {
+    const m = membraneById.get(uncalibrated.membraneId);
+    const label = m?.label ?? uncalibrated.membraneId;
+    const gap =
+      uncalibrated.baselineSource === "estimated"
+        ? "a literature-based estimate stands in for it"
+        : "there is no figure for it at all";
+    return `Run one filtration trial: filter a known volume of raw water through the ${label} membrane alone and record the volume passed before it blinds. There is no real bench-trial calibration at this pore size yet - ${gap} - so record the result in data/trials.json.`;
   }
-  const a = pretreatmentWins[0];
-  const rec = a.recommendation as Extract<typeof a.recommendation, { kind: "pretreatment" }>;
-  const m = membraneById.get(a.membraneId);
-  return `Run one filtration trial: filter a known volume of raw water through the ${m?.label ?? a.membraneId} membrane, then the same volume of ${rec.methodLabel} overflow, and compare. That measures the uplift directly instead of inferring it through three layers of assumption - record it in data/trials.json.`;
+  const anyRealConcentration = assessments.some((a) => a.baselineReasoning.includes("real measured solids concentration"));
+  if (!anyRealConcentration) {
+    return "Every membrane rating tested already has a real bench-trial calibration. The next useful step is a measured suspended-solids concentration near this site (from the EA Water Quality Archive, or a direct sample) - every baseline volume here still assumes the calibration trials' own reference concentration, not a real one for this site.";
+  }
+  return "Every membrane rating tested already has a real, site-concentration-calibrated baseline - there is nothing cheap left to measure that would materially sharpen these numbers further.";
 }
